@@ -284,6 +284,8 @@ txt_oleada = texto('', (0, .47), 1.35, color.white, True)
 txt_enemigos = texto('', (0, .418), .78, color.light_gray, True)
 txt_hint = texto('', (0, .372), .68, color.yellow, True)
 txt_aviso = texto('', (0, .2), 2.4, color.white, True)
+hitmarker = texto('x', (0, 0), 2.5, color.white, True)
+hitmarker.enabled = False
 
 # Estado del jugador: etiquetas separadas de sus barras.
 panel_hud((-.70, -.42), (.57, .18))
