@@ -1927,6 +1927,7 @@ def actualizar_oleadas(dt):
             S.spawn_t = max(0.45, 1.5 - 0.06 * S.oleada)
     elif not enemigos:
         bono = 100 * S.oleada
+        registrar_evento(f"OLEADA {S.oleada} COMPLETADA | bono={bono}")
         ganar(bono)
         aviso(f"¡Oleada {S.oleada} superada!  +{bono}", 3, color.lime)
         S.intermedio = INTERMEDIO
@@ -2027,6 +2028,7 @@ def terminar():
 
 
 def recoger(r):
+    registrar_evento(f"RECOGIDO: {r.tipo} | oleada={S.oleada}")
     if r.tipo == "salud":
         S.salud = min(S.salud_max, S.salud + 35)
         aviso("+35 Vida", 1, color.lime)
