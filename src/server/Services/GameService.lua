@@ -222,7 +222,7 @@ local function createEnemy(kind: string): Model?
 			local nearest: Player?=nil; local distance=math.huge
 			for _,plr in ipairs(Players:GetPlayers()) do
 				local r=rootOf(plr); local h=humanoidOf(plr)
-				if r and h and h.Health>0 then local dist=(r.Position-root.Position).Magnitude; if dist<distance then nearest=plr; distance=dist end end
+				if r and h and h.Health>0 and not (data[plr] and data[plr].Paused) then local dist=(r.Position-root.Position).Magnitude; if dist<distance then nearest=plr; distance=dist end end
 			end
 			if not nearest then task.wait(.5); continue end
 			local targetRoot=rootOf(nearest); local targetHum=humanoidOf(nearest)
@@ -250,7 +250,7 @@ local function createEnemy(kind: string): Model?
 						projectile.Touched:Connect(function(part)
 							if hit then return end
 							local char=part:FindFirstAncestorOfClass("Model"); local plr=char and Players:GetPlayerFromCharacter(char)
-							if plr and plr==nearest then hit=true; local pd=data[plr]; local ph=humanoidOf(plr); if ph and (not pd or os.clock()>pd.InvulnerableUntil) then ph:TakeDamage(cfg.Damage) end; projectile:Destroy() end
+							if plr and plr==nearest then hit=true; local pd=data[plr]; local ph=humanoidOf(plr); if ph and (not pd or (not pd.Paused and os.clock()>pd.InvulnerableUntil)) then ph:TakeDamage(cfg.Damage) end; projectile:Destroy() end
 						end)
 						Debris:AddItem(projectile,5)
 					end
@@ -274,7 +274,7 @@ local function createEnemy(kind: string): Model?
 						hum:MoveTo(targetRoot.Position)
 					end
 				end
-				if distance<math.max(cfg.Size.X/2+2,3) and os.clock()-lastAttack>1 then lastAttack=os.clock(); local targetData=data[nearest]; if not targetData or os.clock()>targetData.InvulnerableUntil then targetHum:TakeDamage(cfg.Damage) end end
+				if distance<math.max(cfg.Size.X/2+2,3) and os.clock()-lastAttack>1 then lastAttack=os.clock(); local targetData=data[nearest]; if not targetData or (not targetData.Paused and os.clock()>targetData.InvulnerableUntil) then targetHum:TakeDamage(cfg.Damage) end end
 			end
 			task.wait(.25)
 		end
