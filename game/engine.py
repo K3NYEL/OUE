@@ -1064,6 +1064,7 @@ class Enemigo(Entity):
         if S.combo >= 3:
             aviso(f"¡Combo x{S.combo}! +{pts} puntos", 1.5, color.orange)
         S.muertes += 1
+        registrar_evento(f"BAJA: tipo={self.tipo} | puntos=+{pts} | bajas={S.muertes} | puntos_totales={S.puntos}")
         if S.perks["robo"] > 0:
             S.salud = min(S.salud_max, S.salud + 2 * S.perks["robo"])
         if self.tipo == "jefe":
@@ -1897,6 +1898,7 @@ def iniciar_oleada():
     S.oleada += 1
     S.cola = componer_oleada(S.oleada)
     S.enemigos_oleada_total = len(S.cola)
+    registrar_evento(f"OLEADA {S.oleada} INICIADA | enemigos={S.enemigos_oleada_total}")
     S.spawn_t = 1.5
     if S.oleada % 5 == 0:
         aviso(f"¡¡JEFE!!  Oleada {S.oleada}", 3, color.red)
@@ -1958,6 +1960,7 @@ def iniciar():
             destroy(e)
         lista.clear()
     vars(S).update(nuevo_estado(S.record))
+    iniciar_log_partida()
     retro.reiniciar()
     bloom.reiniciar()
     _heading_ult[0] = None
@@ -1989,6 +1992,7 @@ def pausar():
     mouse.locked = False
     camera.fov = 90
     ui_pausa.enabled = True
+    registrar_evento("PARTIDA PAUSADA")
 
 
 def reanudar():
@@ -1996,6 +2000,7 @@ def reanudar():
     jugador.enabled = True
     mouse.locked = True
     ui_pausa.enabled = False
+    registrar_evento("PARTIDA REANUDADA")
 
 
 def terminar():
@@ -2006,6 +2011,7 @@ def terminar():
     if nuevo:
         S.record = S.puntos
         guardar_record(S.record)
+    cerrar_log_partida("DERROTA")
     jugador.enabled = False
     mouse.visible = True
     mouse.locked = False
