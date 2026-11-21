@@ -85,7 +85,7 @@ local function togglePause(value:boolean)
  paused=value; pausePanel.Visible=value
  Action:FireServer("Pause",value)
  if value then UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true
- else UserInputService.MouseBehavior=Enum.MouseBehavior.LockCenter; UserInputService.MouseIconEnabled=false end
+ else UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false end
 end
 resume.Activated:Connect(function() togglePause(false) end)
 local function toggleShop(value:boolean)
