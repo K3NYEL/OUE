@@ -228,6 +228,11 @@ local function createEnemy(kind: string): Model?
 			local targetRoot=rootOf(nearest); local targetHum=humanoidOf(nearest)
 			if not targetRoot or not targetHum then task.wait(.2); continue end
 			local ranged=cfg.Ranged
+			if (model:GetAttribute("StunnedUntil") or 0)>os.clock() then
+				hum:MoveTo(root.Position)
+				task.wait(.2)
+				continue
+			end
 			if ranged then
 				if distance>17 then hum:MoveTo(targetRoot.Position)
 				elseif distance<9 then hum:MoveTo(root.Position-(targetRoot.Position-root.Position).Unit*7)
