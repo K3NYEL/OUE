@@ -192,7 +192,7 @@ local function createEnemy(kind: string): Model?
 	local back=Instance.new("Frame"); back.Size=UDim2.fromScale(1,1); back.BackgroundColor3=Color3.fromRGB(25,25,25); back.BorderSizePixel=0; back.Parent=healthGui
 	local fill=Instance.new("Frame"); fill.Name="Fill"; fill.Size=UDim2.fromScale(1,1); fill.BackgroundColor3=Color3.fromRGB(80,230,100); fill.BorderSizePixel=0; fill.Parent=back
 	hum.HealthChanged:Connect(function(hp) fill.Size=UDim2.fromScale(math.clamp(hp/hum.MaxHealth,0,1),1) end)
-	local alive=true; local lastAttack=0; local lastShot=0; local lastPath=0
+	local alive=true; local lastAttack=0; local lastShot=0; local lastPath=0; local waypoints:{PathWaypoint}?=nil; local waypointIndex=2
 	hum.Died:Connect(function()
 		if not alive then return end; alive=false; enemyCount=math.max(0,enemyCount-1)
 		local creator=hum:FindFirstChild("creator")
@@ -251,7 +251,7 @@ local function createEnemy(kind: string): Model?
 					end
 				end
 			else
-				if os.clock()-lastPath>.8 then lastPath=os.clock(); hum:MoveTo(targetRoot.Position) end
+				if os.clock()-lastPath>1 then\n\t\t\t\t\tlastPath=os.clock()\n\t\t\t\t\tlocal path=PathfindingService:CreatePath({AgentRadius=math.max(1,cfg.Size.X/2),AgentHeight=cfg.Size.Y,AgentCanJump=true})\n\t\t\t\t\tlocal ok=pcall(function() path:ComputeAsync(root.Position,targetRoot.Position) end)\n\t\t\t\t\tif ok and path.Status==Enum.PathStatus.Success then waypoints=path:GetWaypoints(); waypointIndex=math.min(2,#waypoints) else waypoints=nil end\n\t\t\t\t\tif waypoints and waypoints[waypointIndex] then\n\t\t\t\t\t\tlocal waypoint=waypoints[waypointIndex]\n\t\t\t\t\t\tif waypoint.Action==Enum.PathWaypointAction.Jump then hum.Jump=true end\n\t\t\t\t\t\thum:MoveTo(waypoint.Position)\n\t\t\t\t\telse hum:MoveTo(targetRoot.Position) end\n\t\t\t\tend
 				if distance<math.max(cfg.Size.X/2+2,3) and os.clock()-lastAttack>1 then lastAttack=os.clock(); targetHum:TakeDamage(cfg.Damage) end
 			end
 			task.wait(.25)
