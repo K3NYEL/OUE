@@ -5,6 +5,7 @@ from typing import Any
 import random
 import math
 from time import perf_counter as _perf_counter
+from datetime import datetime
 
 from .config import *
 from .audio import *
@@ -89,6 +90,45 @@ def nuevo_estado(record):
 
 S = SimpleNamespace()
 vars(S).update(nuevo_estado(leer_record()))
+
+# Cada partida genera su propio TXT dentro de /logs.
+_DIR_LOGS = Path(__file__).resolve().parent.parent / "logs"
+_archivo_log_partida = None
+_inicio_log_partida = None
+
+def iniciar_log_partida():
+    global _archivo_log_partida, _inicio_log_partida
+    ahora = datetime.now()
+    _DIR_LOGS.mkdir(parents=True, exist_ok=True)
+    _archivo_log_partida = _DIR_LOGS / f"partida_{ahora.strftime('%Y%m%d_%H%M%S')}.txt"
+    _inicio_log_partida = _perf_counter()
+    _archivo_log_partida.write_text(
+        "CAZADOR DE OLEADAS - REGISTRO DE PARTIDA\n"
+        f"Inicio: {ahora.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        + "=" * 64 + "\n",
+        encoding="utf-8",
+    )
+    registrar_evento("PARTIDA INICIADA")
+
+def registrar_evento(mensaje):
+    if _archivo_log_partida is None:
+        return
+    try:
+        transcurrido = _perf_counter() - (_inicio_log_partida or _perf_counter())
+        with _archivo_log_partida.open("a", encoding="utf-8") as archivo:
+            archivo.write(f"[+{transcurrido:07.1f}s] {mensaje}\n")
+    except OSError as error:
+        print(f"[LOG] No se pudo escribir el registro: {error}")
+
+def cerrar_log_partida(resultado):
+    if _archivo_log_partida is None:
+        return
+    registrar_evento(
+        f"FIN DE PARTIDA: {resultado} | oleada={S.oleada} | "
+        f"puntos={S.puntos} | bajas={S.muertes} | record={S.record}"
+    )
+    registrar_evento(f"Duracion: {_perf_counter() - (_inicio_log_partida or _perf_counter()):.1f}s")
+
 
 retro = Retroceso()   # retroceso acumulado con recuperacion (balistica.py)
 bloom = Bloom()       # dispersion creciente por rafaga
