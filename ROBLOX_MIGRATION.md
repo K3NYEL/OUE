@@ -69,9 +69,9 @@ El port ya contiene una implementacion jugable inicial de los sistemas principal
 - [x] Sprint y stamina.
 - [x] Dash, onda, torreta, furia y drones.
 - [x] Tienda, creditos, mejoras, perks y suministros.
-- [x] HUD, radar, viewmodel FPS y controles.
+- [x] HUD, radar, viewmodel FPS, controles y pausa por jugador.
 - [x] Guardado del record por usuario.
 - [ ] Audio publicado y vinculado por asset IDs.
-- [ ] Animaciones/efectos finales y pantallas de menu, pausa y derrota.
+- [ ] Animaciones/efectos finales, menu de inicio y pantalla de derrota dedicada (la pausa ya esta implementada).
 - [ ] Navegacion avanzada, balance y pruebas multijugador completas.
 - [ ] Validacion en Roblox Studio y correccion de errores de ejecucion.
