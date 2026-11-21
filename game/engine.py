@@ -713,7 +713,7 @@ class Torreta(Entity):
         self.vida = self.vida_max = 25 + 5 * niv
         self.cd = .3
         self.sonido_activo = False
-        self.sonido = SONIDO_TORRETA_LOOP
+        self.sonido = cargar_audio(('torreta.wav', 'turret.wav'), .30, loop=True)
         bg = _entity_factory(parent=self, model='quad', color=color.black, scale=(1.2, .12), y=2, billboard=True)
         self.barra = _entity_factory(parent=bg, model='quad', color=color.orange, origin_x=-.5, x=-.5,
                             z=-.01, scale=(1, .7))
