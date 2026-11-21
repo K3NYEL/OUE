@@ -41,7 +41,7 @@ type PlayerData = {
 	Weapon: number, Unlocked: {[number]: boolean}, Magazine: {[number]: number}, Reserve: {[number]: number},
 	WeaponLevels: {[number]: {[string]: number}}, Perks: {[string]: number}, Abilities: {[string]: number},
 	Cooldowns: {[string]: number}, LastShot: number, ReloadUntil: number, FuryUntil: number,
-	Combo: number, ComboUntil: number, BuffUntil: number, Stamina: number, Sprinting: boolean,
+	Combo: number, ComboUntil: number, BuffUntil: number, Stamina: number, Sprinting: boolean, Paused: boolean,
 	LastDash: number, LastShock: number, LastTurret: number, LastFury: number, Turrets: {Model}, Drones: {BasePart},
 }
 local data: {[Player]: PlayerData} = {}
@@ -67,7 +67,7 @@ local function newData(): PlayerData
 		Abilities={dash=0,onda=0,torreta=0,furia=0},
 		Cooldowns={dash=0,onda=0,torreta=0,furia=0},
 		LastShot=0,ReloadUntil=0,FuryUntil=0,Combo=0,ComboUntil=0,BuffUntil=0,
-		Stamina=100,Sprinting=false,LastDash=0,LastShock=0,LastTurret=0,LastFury=0,Turrets={},Drones={},
+		Stamina=100,Sprinting=false,Paused=false,LastDash=0,LastShock=0,LastTurret=0,LastFury=0,Turrets={},Drones={},
 	}
 end
 
@@ -334,7 +334,7 @@ end
 
 local function shoot(player: Player, direction: Vector3)
 	local d=data[player]; local root=rootOf(player); local hum=humanoidOf(player)
-	if not d or not root or not hum or hum.Health<=0 or direction.Magnitude<.8 then return end
+	if not d or d.Paused or not root or not hum or hum.Health<=0 or direction.Magnitude<.8 then return end
 	local now=os.clock(); local weapon=Config.Weapons[d.Weapon]
 	if now-d.LastShot<stat(player,"FireRate")*.82 or now<d.ReloadUntil then return end
 	local fury=now<d.FuryUntil
@@ -442,7 +442,7 @@ local function syncDrones(player: Player)
 end
 
 local function useAbility(player: Player, key: string)
-	local d=data[player]; local root=rootOf(player); local hum=humanoidOf(player); if not d or not root or not hum then return end
+	local d=data[player]; local root=rootOf(player); local hum=humanoidOf(player); if not d or d.Paused or not root or not hum then return end
 	local level=d.Abilities[key] or 0; local now=os.clock()
 	if key=="dash" then
 		if now-d.LastDash<5*(.85^level) then return end
@@ -560,7 +560,7 @@ Action.OnServerEvent:Connect(function(player: Player, action: string, value: any
 	elseif action=="Shop" and typeof(value)=="table" then
 		if intermission<=0 then return end
 		if typeof(value.Category)=="string" and typeof(value.Key)=="string" then buy(player,value.Category,value.Key,if typeof(value.Index)=="number" then value.Index else nil) end
-	elseif action=="Sprint" and typeof(value)=="boolean" then d.Sprinting=value
+	elseif action=="Pause" and typeof(value)=="boolean" then d.Paused=value; if not value then sendState(player) end\n\telseif action=="Sprint" and typeof(value)=="boolean" then d.Sprinting=value
 	elseif action=="StartWave" then if intermission>0 then intermission=.01 end
 	elseif action=="Pickup" and typeof(value)=="Instance" and value:IsA("BasePart") then
 		local root=rootOf(player); if root and (root.Position-value.Position).Magnitude<8 then pickupTouched(value,player) end
