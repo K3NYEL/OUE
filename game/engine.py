@@ -801,7 +801,7 @@ def disparar():
     origen = camera.world_position
     muzzle = arma_modelo.world_position + camera.forward * .8
     dano_base = stat(S.arma, 'dano') * (2 if S.buff_t > 0 else 1)
-    disp = a['dispersion'] * (.4 if __held_keys['right mouse'] else 1)
+    disp = a['dispersion'] * (.4 if _held_keys['right mouse'] else 1)
 
     for _ in range(a['perdigones']):
         v = (camera.forward + Vec3(random.uniform(-1, 1), random.uniform(-1, 1),
