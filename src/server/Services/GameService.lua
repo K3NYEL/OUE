@@ -380,14 +380,18 @@ local function shoot(player: Player, direction: Vector3)
 end
 
 local function reload(player: Player)
-	local d=data[player]; if not d then return end
-	local i=d.Weapon
-	if os.clock()<d.ReloadUntil or d.Magazine[i]>=stat(player,"Magazine") or d.Reserve[i]<=0 then return end
-	local duration=stat(player,"Reload"); d.ReloadUntil=os.clock()+duration
+	local d=data[player]; if not d or d.Paused then return end
+	local index=d.Weapon
+	local maxMagazine=math.floor(Config.Weapons[index].Magazine*(1+.25*d.WeaponLevels[index].Magazine)+.5)
+	if os.clock()<d.ReloadUntil or d.Magazine[index]>=maxMagazine or d.Reserve[index]<=0 then return end
+	local duration=stat(player,"Reload")
+	local finishAt=os.clock()+duration
+	d.ReloadUntil=finishAt
 	task.delay(duration,function()
-		if not data[player] then return end
-		local needed=math.max(0,stat(player,"Magazine")-d.Magazine[i]); local take=math.min(needed,d.Reserve[i])
-		d.Magazine[i]+=take; d.Reserve[i]-=take; sendState(player)
+		if data[player]~=d or d.ReloadUntil~=finishAt then return end
+		local needed=math.max(0,maxMagazine-d.Magazine[index])
+		local take=math.min(needed,d.Reserve[index])
+		d.Magazine[index]+=take; d.Reserve[index]-=take; d.ReloadUntil=0; sendState(player)
 	end)
 end
 
