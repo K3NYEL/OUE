@@ -2198,7 +2198,9 @@ def registrar_perfil(dt_real):
         return
     divisor = max(1, _perfil_frames)
     partes = " | ".join(f"{nombre}={total * 1000 / divisor:.2f}ms" for nombre, total in _perfil_acum.items())
-    print(f"[PERFIL] oleada={S.oleada} | estado={S.estado} | promedio por frame ({divisor} frames): {partes} | particulas={len(EFECTOS_ACTIVOS['particula'])} | rayos={len(EFECTOS_ACTIVOS['rayo'])} | anillos={len(EFECTOS_ACTIVOS['anillo'])} | recogibles={len(recogibles)} | torretas={len(torretas)} | drones={len(drones)}")
+    linea = f"[PERFIL] oleada={S.oleada} | estado={S.estado} | promedio por frame ({divisor} frames): {partes} | particulas={len(EFECTOS_ACTIVOS['particula'])} | rayos={len(EFECTOS_ACTIVOS['rayo'])} | anillos={len(EFECTOS_ACTIVOS['anillo'])} | recogibles={len(recogibles)} | torretas={len(torretas)} | drones={len(drones)}"
+    print(linea)
+    registrar_evento(linea)
     _perfil_tiempo = 0.0
     _perfil_frames = 0
     for nombre in _perfil_acum:
@@ -2225,12 +2227,14 @@ def capturar_fps(dt):
 
     if _fps_tiempo >= 5.0:
         fps_promedio = _fps_frames / _fps_tiempo
-        print(
+        linea = (
             f"[FPS] estado={S.estado} | oleada={S.oleada} | "
             f"actual={fps_actual:.1f} | promedio={fps_promedio:.1f} | "
             f"min={_fps_minimo:.1f} | max={_fps_maximo:.1f} | "
             f"enemigos={len(enemigos)} | proyectiles={len(proyectiles)}"
         )
+        print(linea)
+        registrar_evento(linea)
         _fps_tiempo = 0.0
         _fps_frames = 0
         _fps_minimo = float("inf")
