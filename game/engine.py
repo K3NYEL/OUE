@@ -392,6 +392,8 @@ def mas_cercano(pos, rango):
     limite2 = rango * rango
     mejor_d2 = limite2
     for e in enemigos:
+        if e.muerto:
+            continue
         dx, dz = e.x - pos.x, e.z - pos.z
         d2 = dx * dx + dz * dz
         if d2 < mejor_d2:
@@ -894,7 +896,7 @@ def usar_torreta():
     p = hit.world_point if hit.hit else camera.world_position + camera.forward * 6
     p = Vec3(clamp(p.x, -ARENA + 3, ARENA - 3), 0, clamp(p.z, -ARENA + 3, ARENA - 3))
     while len(torretas) >= maximo:
-        destroy(torretas.pop(0))
+        torretas[0].quitar()
     torretas.append(Torreta(p, n))
     S.cdh['torreta'] = CD_BASE['torreta'] * (.85 ** n)
     aviso('Torreta desplegada', 1, color.orange)
@@ -1132,8 +1134,16 @@ def actualizar_oleadas(dt):
 # =====================================================================
 #  ESTADOS DEL JUEGO
 # =====================================================================
+def detener_audio_torretas():
+    """Detiene el audio de todas las torretas antes de limpiar o cambiar de estado."""
+    for torreta in torretas[:]:
+        detener_audio(torreta.sonido)
+        torreta.sonido_activo = False
+
+
 def iniciar():
     global _radar_timer, _hud_timer
+    detener_audio_torretas()
     _radar_timer = 0.0
     _hud_timer = 0.0
     for activos in EFECTOS_ACTIVOS.values():
@@ -1163,6 +1173,7 @@ def iniciar():
 
 
 def pausar():
+    detener_audio_torretas()
     S.estado = 'pausa'
     jugador.enabled = False
     mouse.visible = True
@@ -1179,6 +1190,7 @@ def reanudar():
 
 
 def terminar():
+    detener_audio_torretas()
     S.estado = 'fin'
     nuevo = S.puntos > S.record
     if nuevo:
