@@ -86,12 +86,21 @@ local function sendState(player: Player)
 	local d = data[player]
 	local hum = humanoidOf(player)
 	if not d then return end
+	local radarEnemies = {}
+	local playerRoot = rootOf(player)
+	if playerRoot then
+		for _, enemy in ipairs(enemiesFolder:GetChildren()) do
+			if enemy:IsA("Model") and enemy.PrimaryPart and (enemy.PrimaryPart.Position-playerRoot.Position).Magnitude <= Config.RadarRange then
+				table.insert(radarEnemies, enemy.PrimaryPart.Position)
+			end
+		end
+	end
 	local mags, reserves = {}, {}
 	for i=1,#Config.Weapons do mags[i]=d.Magazine[i]; reserves[i]=d.Reserve[i] end
 	State:FireClient(player, {
 		Health=hum and hum.Health or 0, MaxHealth=hum and hum.MaxHealth or 100,
 		Points=d.Points,Credits=d.Credits,Record=math.max(d.Record,d.Points),Kills=d.Kills,
-		Wave=wave,Enemies=enemyCount + #spawnQueue,Intermission=intermission,
+		Wave=wave,Enemies=enemyCount + #spawnQueue,Intermission=intermission,RadarEnemies=radarEnemies,
 		Weapon=d.Weapon,Magazine=mags,Reserve=reserves,Unlocked=d.Unlocked,
 		Cooldowns=d.Cooldowns,Fury=math.max(0,d.FuryUntil-os.clock()),
 		Stamina=d.Stamina,Combo=d.Combo,Perks=d.Perks,Abilities=d.Abilities,
