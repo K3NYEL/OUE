@@ -597,6 +597,7 @@ local function startWaves()
 				intermission=math.max(0,intermission-1)
 				for player in pairs(data) do sendState(player) end
 				task.wait(1)
+				if intermission<=0 then spawnWave() end
 			elseif #spawnQueue>0 then
 				if enemyCount<Config.MaxEnemiesAlive then
 					local kind=table.remove(spawnQueue,1)
