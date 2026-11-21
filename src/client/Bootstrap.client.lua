@@ -12,6 +12,7 @@ local Notice=remotes:WaitForChild("Notice") :: RemoteEvent
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameConfig"))
 local current:any={}
 local shopOpen=false
+local paused=false
 local firing=false
 local sprinting=false
 local gui=Instance.new("ScreenGui"); gui.Name="OUE_HUD"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.Parent=player:WaitForChild("PlayerGui")
