@@ -42,7 +42,7 @@ type PlayerData = {
 	WeaponLevels: {[number]: {[string]: number}}, Perks: {[string]: number}, Abilities: {[string]: number},
 	Cooldowns: {[string]: number}, LastShot: number, ReloadUntil: number, FuryUntil: number,
 	Combo: number, ComboUntil: number, BuffUntil: number, Stamina: number, Sprinting: boolean, Paused: boolean,
-	LastDash: number, LastShock: number, LastTurret: number, LastFury: number, Turrets: {Model}, Drones: {BasePart},
+	LastDash: number, LastShock: number, LastTurret: number, LastFury: number, InvulnerableUntil: number, Turrets: {Model}, Drones: {BasePart},
 }
 local data: {[Player]: PlayerData} = {}
 local wave = 0
@@ -67,7 +67,7 @@ local function newData(): PlayerData
 		Abilities={dash=0,onda=0,torreta=0,furia=0},
 		Cooldowns={dash=0,onda=0,torreta=0,furia=0},
 		LastShot=0,ReloadUntil=0,FuryUntil=0,Combo=0,ComboUntil=0,BuffUntil=0,
-		Stamina=100,Sprinting=false,Paused=false,LastDash=0,LastShock=0,LastTurret=0,LastFury=0,Turrets={},Drones={},
+		Stamina=100,Sprinting=false,Paused=false,LastDash=0,LastShock=0,LastTurret=0,LastFury=0,InvulnerableUntil=0,Turrets={},Drones={},
 	}
 end
 
@@ -250,7 +250,7 @@ local function createEnemy(kind: string): Model?
 						projectile.Touched:Connect(function(part)
 							if hit then return end
 							local char=part:FindFirstAncestorOfClass("Model"); local plr=char and Players:GetPlayerFromCharacter(char)
-							if plr and plr==nearest then hit=true; local ph=humanoidOf(plr); if ph then ph:TakeDamage(cfg.Damage) end; projectile:Destroy() end
+							if plr and plr==nearest then hit=true; local pd=data[plr]; local ph=humanoidOf(plr); if ph and (not pd or os.clock()>pd.InvulnerableUntil) then ph:TakeDamage(cfg.Damage) end; projectile:Destroy() end
 						end)
 						Debris:AddItem(projectile,5)
 					end
@@ -274,7 +274,7 @@ local function createEnemy(kind: string): Model?
 						hum:MoveTo(targetRoot.Position)
 					end
 				end
-				if distance<math.max(cfg.Size.X/2+2,3) and os.clock()-lastAttack>1 then lastAttack=os.clock(); targetHum:TakeDamage(cfg.Damage) end
+				if distance<math.max(cfg.Size.X/2+2,3) and os.clock()-lastAttack>1 then lastAttack=os.clock(); local targetData=data[nearest]; if not targetData or os.clock()>targetData.InvulnerableUntil then targetHum:TakeDamage(cfg.Damage) end end
 			end
 			task.wait(.25)
 		end
@@ -456,7 +456,7 @@ local function useAbility(player: Player, key: string)
 	local level=d.Abilities[key] or 0; local now=os.clock()
 	if key=="dash" then
 		if now-d.LastDash<5*(.85^level) then return end
-		d.LastDash=now; local direction=hum.MoveDirection; if direction.Magnitude<.1 then direction=root.CFrame.LookVector end
+		d.LastDash=now; d.InvulnerableUntil=now+.2+.02*level; local direction=hum.MoveDirection; if direction.Magnitude<.1 then direction=root.CFrame.LookVector end
 		root.AssemblyLinearVelocity=Vector3.new(direction.Unit.X*70,root.AssemblyLinearVelocity.Y,direction.Unit.Z*70)
 		task.delay(.22,function() if root.Parent then root.AssemblyLinearVelocity=Vector3.new(0,root.AssemblyLinearVelocity.Y,0) end end)
 	elseif key=="onda" then
