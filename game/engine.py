@@ -571,6 +571,9 @@ for _w, _h in ((1.0, 0.006), (0.006, 1.0)):   # cruz de ejes
 _entity_factory(parent=radar, model=Mesh(vertices=[(0, 0.07, 0), (-0.045, -0.04, 0), (0.045, -0.04, 0)],
                                          triangles=[(0, 1, 2)]),
                 color=color.white, z=-0.02, double_sided=True)
+# Punto central: referencia fija de la posición del jugador.
+_entity_factory(parent=radar, model="circle", scale=0.018,
+                color=ORO, position=(0, 0, -0.025))
 
 # Brujula: 8 direcciones + marcas cada 15 grados, giran con el jugador (arriba = hacia donde miras)
 _GRIS_OSC = rgb255(105, 114, 130)
@@ -639,6 +642,8 @@ HAB_COL = dict(dash=CIAN, onda=CIAN, torreta=ORO, furia=ROJO_H)
 HAB_NOM = dict(dash="DASH", onda="ONDA", torreta="TORR.", furia="FURIA")
 CD_TOT = {k: 0.0 for k in HABS}
 HR, HY = 0.045, -0.3875
+# Base común para agrupar las cuatro habilidades y sus teclas.
+tarjeta(hud_info, 0, -0.407, 0.49, 0.145, PANEL, BORDE, 0.67)
 hab_ui = {}
 for _xh, _k in zip((-0.1667, -0.0556, 0.0556, 0.1667), HABS):
     _entity_factory(parent=hud_info, model="circle", scale=HR * 2 - 0.012, position=(_xh, HY, 0.62), color=PANEL)
