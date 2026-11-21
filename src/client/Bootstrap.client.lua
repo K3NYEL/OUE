@@ -99,6 +99,37 @@ end)
 UIS.InputChanged:Connect(function(input)
  if input.UserInputType==Enum.UserInputType.MouseWheel and current.Weapon then local i=((current.Weapon+(if input.Position.Z>0 then 1 else -1)-1)%#Config.Weapons)+1; Action:FireServer("Equip",i) end
 end)
-RunService.RenderStepped:Connect(function() if firing and not shopOpen then local w=Config.Weapons[current.Weapon or 1]; if w and w.Automatic then fire() end end end)
+RunService.RenderStepped:Connect(function() updateViewmodel(); if firing and not shopOpen then local w=Config.Weapons[current.Weapon or 1]; if w and w.Automatic then fire() end end end)
 player.CharacterAdded:Connect(function() toggleShop(false); UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false end)
 UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false
+
+-- Viewmodel local: no replica piezas al servidor.
+player.CameraMode=Enum.CameraMode.LockFirstPerson
+local viewmodel=Instance.new("Model"); viewmodel.Name="OUE_Viewmodel"; viewmodel.Parent=workspace.CurrentCamera
+local function vmPart(name:string,size:Vector3,color:Color3,offset:CFrame):Part
+ local p=Instance.new("Part"); p.Name=name; p.Size=size; p.Color=color; p.Material=Enum.Material.Metal
+ p.Anchored=true; p.CanCollide=false; p.CanTouch=false; p.CanQuery=false; p.CastShadow=false; p.CFrame=workspace.CurrentCamera.CFrame*offset; p.Parent=viewmodel; return p
+end
+local vmBody=vmPart("Receiver",Vector3.new(.22,.18,.62),Color3.fromRGB(48,50,56),CFrame.new(.48,-.38,-.8))
+local vmBarrel=vmPart("Barrel",Vector3.new(.09,.09,.48),Color3.fromRGB(18,19,22),CFrame.new(.48,-.34,-1.3))
+local vmGrip=vmPart("Grip",Vector3.new(.12,.28,.16),Color3.fromRGB(28,29,32),CFrame.new(.48,-.55,-.65))
+local vmMuzzle=vmPart("Muzzle",Vector3.new(.13,.13,.08),Color3.fromRGB(90,90,95),CFrame.new(.48,-.34,-1.56))
+local vmFlash=vmPart("MuzzleFlash",Vector3.new(.25,.25,.25),Color3.fromRGB(255,190,70),CFrame.new(.48,-.34,-1.68))
+vmFlash.Shape=Enum.PartType.Ball; vmFlash.Material=Enum.Material.Neon; vmFlash.Transparency=1
+local lastVmWeapon=0
+local function updateViewmodel()
+ local cam=workspace.CurrentCamera; if not cam then return end
+ if current.Weapon and current.Weapon~=lastVmWeapon then
+  lastVmWeapon=current.Weapon
+  local weapon=Config.Weapons[lastVmWeapon]
+  vmBody.Color=weapon.Color
+  vmBody.Size=Vector3.new(.22,.18,math.clamp(weapon.Size.Z*.9,.35,1))
+  vmBarrel.Size=Vector3.new(.09,.09,math.max(.25,weapon.Size.Z*.7))
+ end
+ local base=CFrame.new(.48,-.38,-.8)
+ vmBody.CFrame=cam.CFrame*base
+ vmBarrel.CFrame=cam.CFrame*CFrame.new(.48,-.34,-1.3)
+ vmGrip.CFrame=cam.CFrame*CFrame.new(.48,-.55,-.65)
+ vmMuzzle.CFrame=cam.CFrame*CFrame.new(.48,-.34,-1.56)
+ vmFlash.CFrame=cam.CFrame*CFrame.new(.48,-.34,-1.7)
+end
