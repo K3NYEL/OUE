@@ -124,7 +124,7 @@ Sky()
 largo = ARENA * 2 + 2
 for x, z, sx, sz in ((0, ARENA, largo, 1), (0, -ARENA, largo, 1),
                      (ARENA, 0, 1, largo), (-ARENA, 0, 1, largo)):
-    Entity(model='cube', position=(x, 3, z), scale=(sx, 6, sz), color=color.gray,
+    _entity_factory(model='cube', position=(x, 3, z), scale=(sx, 6, sz), color=color.gray,
            texture='brick', texture_scale=(20, 2), collider='box')
 
 obstaculos = []   # (x, z, radio, altura), datos de colision independientes del render
@@ -169,7 +169,7 @@ def actualizar_obstaculos_visibles():
         entidad = obstaculos_visibles.get(i)
         if debe_existir and entidad is None:
             escala, alto, col = obstaculos_meta[i]
-            obstaculos_visibles[i] = Entity(
+            obstaculos_visibles[i] = _entity_factory(
                 model='cube', position=(x, alto / 2, z), scale=(escala, alto, escala),
                 texture='white_cube', color=col, collider='box')
         elif not debe_existir and entidad is not None:
@@ -177,21 +177,21 @@ def actualizar_obstaculos_visibles():
             del obstaculos_visibles[i]
 
 
-arma_modelo = Entity(parent=camera, model='cube', position=(.4, -.32, .9),
+arma_modelo = _entity_factory(parent=camera, model='cube', position=(.4, -.32, .9),
                      scale=(.1, .14, .5), color=color.dark_gray)
-canon = Entity(parent=arma_modelo, model='cube', position=(0, .25, .7), scale=(.6, .4, .7), color=color.black)
-fogonazo = Entity(parent=camera, model='quad', position=(.4, -.2, 1.5), scale=.35,
+canon = _entity_factory(parent=arma_modelo, model='cube', position=(0, .25, .7), scale=(.6, .4, .7), color=color.black)
+fogonazo = _entity_factory(parent=camera, model='quad', position=(.4, -.2, 1.5), scale=.35,
                   color=color.yellow, enabled=False)
 
 # =====================================================================
 #  INTERFAZ
 # =====================================================================
-hud = Entity(parent=camera.ui, enabled=False)
-ui_menu = Entity(parent=camera.ui)
-ui_pausa = Entity(parent=camera.ui, enabled=False)
-ui_fin = Entity(parent=camera.ui, enabled=False)
-ui_tienda = Entity(parent=camera.ui, enabled=False)
-overlay_dano = Entity(parent=camera.ui, model='quad', scale=(4, 2), color=Vec4(1, 0, 0, 0), z=2)
+hud = _entity_factory(parent=camera.ui, enabled=False)
+ui_menu = _entity_factory(parent=camera.ui)
+ui_pausa = _entity_factory(parent=camera.ui, enabled=False)
+ui_fin = _entity_factory(parent=camera.ui, enabled=False)
+ui_tienda = _entity_factory(parent=camera.ui, enabled=False)
+overlay_dano = _entity_factory(parent=camera.ui, model='quad', scale=(4, 2), color=Vec4(1, 0, 0, 0), z=2)
 
 
 def texto(txt, pos, esc=1.2, col=color.white, centro=False, padre=None):
@@ -210,7 +210,7 @@ def poner(t, s):
 
 
 def fondo(padre):
-    Entity(parent=padre, model='quad', scale=(4, 2), color=Vec4(0, 0, 0, .75), z=1)
+    _entity_factory(parent=padre, model='quad', scale=(4, 2), color=Vec4(0, 0, 0, .75), z=1)
 
 
 # --- menu ---
@@ -276,8 +276,8 @@ for xh, k in zip((-.27, -.09, .09, .27), HABS):
 
 
 def barra(pos, tam, col):
-    bg = Entity(parent=hud, model='quad', color=color.dark_gray, scale=tam, position=pos)
-    return Entity(parent=bg, model='quad', color=col, origin_x=-.5, x=-.5, z=-.01)
+    bg = _entity_factory(parent=hud, model='quad', color=color.dark_gray, scale=tam, position=pos)
+    return _entity_factory(parent=bg, model='quad', color=col, origin_x=-.5, x=-.5, z=-.01)
 
 
 barra_vida = barra((-.63, -.44), (.46, .035), color.red)
@@ -285,11 +285,11 @@ barra_stamina = barra((-.63, -.48), (.46, .015), color.azure)
 
 for dx, dy, sx, sy in ((-.014, 0, .012, .003), (.014, 0, .012, .003),
                        (0, .014, .003, .012), (0, -.014, .003, .012)):
-    Entity(parent=hud, model='quad', color=color.white, position=(dx, dy), scale=(sx, sy))
+    _entity_factory(parent=hud, model='quad', color=color.white, position=(dx, dy), scale=(sx, sy))
 
-Entity(parent=hud, model='circle', scale=.3, position=(.72, .26), color=color.dark_gray, z=.01)
-radar = Entity(parent=hud, model='circle', scale=.28, position=(.72, .26), color=Vec4(0, 0, 0, .65))
-Entity(parent=radar, model='circle', scale=.07, color=color.white, z=-.01)
+_entity_factory(parent=hud, model='circle', scale=.3, position=(.72, .26), color=color.dark_gray, z=.01)
+radar = _entity_factory(parent=hud, model='circle', scale=.28, position=(.72, .26), color=Vec4(0, 0, 0, .65))
+_entity_factory(parent=radar, model='circle', scale=.07, color=color.white, z=-.01)
 puntos_radar = []
 
 
@@ -329,7 +329,7 @@ def particulas(pos, col, n=8, vel=2.0):
         return
     disponibles = MAX_PARTICULAS - len(EFECTOS_ACTIVOS['particula'])
     for _ in range(min(n, max(0, disponibles))):
-        p = Entity(model='cube', color=col, scale=random.uniform(.08, .2), position=pos)
+        p = _entity_factory(model='cube', color=col, scale=random.uniform(.08, .2), position=pos)
         destino = pos + Vec3(random.uniform(-1, 1), random.uniform(0, 1.5),
                              random.uniform(-1, 1)) * vel * .6
         p.animate_position(destino, duration=.5, curve=curve.out_quad)
@@ -345,7 +345,7 @@ def rayo(a, b, col=color.yellow, grosor=.04):
     d = (b - a).length()
     if d < .05:
         return
-    r = Entity(model='cube', color=col, position=(a + b) / 2, scale=(grosor, grosor, d))
+    r = _entity_factory(model='cube', color=col, position=(a + b) / 2, scale=(grosor, grosor, d))
     r.look_at(b)
     _crear_efecto('rayo', MAX_RAYOS, r, .07)
 
@@ -355,7 +355,7 @@ def anillo(pos, radio, col, dur=.4):
         return
     if len(EFECTOS_ACTIVOS['anillo']) >= MAX_ANILLOS:
         return
-    r = Entity(model='circle', rotation_x=90, position=Vec3(pos.x, .15, pos.z), scale=1,
+    r = _entity_factory(model='circle', rotation_x=90, position=Vec3(pos.x, .15, pos.z), scale=1,
                color=col, double_sided=True)
     r.animate_scale(radio * 2, duration=dur, curve=curve.out_quad)
     _crear_efecto('anillo', MAX_ANILLOS, r, dur + .02)
@@ -493,16 +493,16 @@ class Enemigo(Entity):
         self.quema_fx = 0
         self.aturdido = 0
 
-        self.cuerpo = Entity(parent=self, model='cube', color=self.color_base, scale=esc,
+        self.cuerpo = _entity_factory(parent=self, model='cube', color=self.color_base, scale=esc,
                              y=esc[1] / 2, collider='box')
         self.cuerpo.enemigo = self
         for sx in (-.22, .22):
-            Entity(parent=self.cuerpo, model='cube', color=color.white,
+            _entity_factory(parent=self.cuerpo, model='cube', color=color.white,
                    scale=(.18, .1, .1), position=(sx, .3, .5))
 
-        self.barra_bg = Entity(parent=self, model='quad', color=color.black,
+        self.barra_bg = _entity_factory(parent=self, model='quad', color=color.black,
                                scale=(max(1.2, esc[0]), .13), y=esc[1] + .5, billboard=True)
-        self.barra = Entity(parent=self.barra_bg, model='quad', color=color.lime,
+        self.barra = _entity_factory(parent=self.barra_bg, model='quad', color=color.lime,
                             origin_x=-.5, x=-.5, z=-.01, scale=(1, .7))
         self._vis_timer = random.uniform(0, VISIBILIDAD_INTERVALO)
         self._actualizar_visibilidad()
@@ -678,7 +678,7 @@ class Dron(Entity):
     def __init__(self, idx):
         _entity_init: Any = super().__init__
         _entity_init(model='sphere', color=color.cyan, scale=.4, position=jugador.world_position)
-        Entity(parent=self, model='cube', color=color.black, scale=(.5, .5, 1.6), z=.6)
+        _entity_factory(parent=self, model='cube', color=color.black, scale=(.5, .5, 1.6), z=.6)
         self.idx = idx
         self.ang = idx * 2.1
         self.cd = random.uniform(0, .8)
@@ -705,15 +705,15 @@ class Torreta(Entity):
 
     def __init__(self, pos, niv):
         super().__init__(position=Vec3(pos.x, 0, pos.z))
-        Entity(parent=self, model='cube', color=color.dark_gray, scale=(1.2, .5, 1.2), y=.25)
-        self.cabeza = Entity(parent=self, model='sphere', color=color.orange, scale=.8, y=.9)
-        Entity(parent=self.cabeza, model='cube', color=color.black, scale=(.25, .25, 1.3), z=.8)
+        _entity_factory(parent=self, model='cube', color=color.dark_gray, scale=(1.2, .5, 1.2), y=.25)
+        self.cabeza = _entity_factory(parent=self, model='sphere', color=color.orange, scale=.8, y=.9)
+        _entity_factory(parent=self.cabeza, model='cube', color=color.black, scale=(.25, .25, 1.3), z=.8)
         self.dano = 14 * (1 + .35 * niv)
         self.cadencia = .5 * (.88 ** niv)
         self.vida = self.vida_max = 25 + 5 * niv
         self.cd = .3
-        bg = Entity(parent=self, model='quad', color=color.black, scale=(1.2, .12), y=2, billboard=True)
-        self.barra = Entity(parent=bg, model='quad', color=color.orange, origin_x=-.5, x=-.5,
+        bg = _entity_factory(parent=self, model='quad', color=color.black, scale=(1.2, .12), y=2, billboard=True)
+        self.barra = _entity_factory(parent=bg, model='quad', color=color.orange, origin_x=-.5, x=-.5,
                             z=-.01, scale=(1, .7))
 
     def quitar(self):
@@ -801,7 +801,7 @@ def disparar():
     origen = camera.world_position
     muzzle = arma_modelo.world_position + camera.forward * .8
     dano_base = stat(S.arma, 'dano') * (2 if S.buff_t > 0 else 1)
-    disp = a['dispersion'] * (.4 if _held_keys['right mouse'] else 1)
+    disp = a['dispersion'] * (.4 if __held_keys['right mouse'] else 1)
 
     for _ in range(a['perdigones']):
         v = (camera.forward + Vec3(random.uniform(-1, 1), random.uniform(-1, 1),
@@ -841,8 +841,8 @@ def usar_dash():
     n = S.hab['dash']
     fx, fz = jugador.forward.x, jugador.forward.z
     rx, rz = jugador.right.x, jugador.right.z
-    mx = held_keys['d'] - held_keys['a']
-    mz = held_keys['w'] - held_keys['s']
+    mx = _held_keys['d'] - _held_keys['a']
+    mz = _held_keys['w'] - _held_keys['s']
     if mx == 0 and mz == 0:
         mz = 1
     dx, dz = fx * mz + rx * mx, fz * mz + rz * mx
@@ -1210,7 +1210,7 @@ def actualizar_radar():
     c, s = math.cos(th), math.sin(th)
     for i, e in enumerate(enemigos):
         if i >= len(puntos_radar):
-            puntos_radar.append(Entity(parent=radar, model='circle', scale=.05, z=-.01))
+            puntos_radar.append(_entity_factory(parent=radar, model='circle', scale=.05, z=-.01))
         dx, dz = e.x - jugador.x, e.z - jugador.z
         rx = dx * c - dz * s
         ry = dx * s + dz * c
@@ -1296,8 +1296,8 @@ def update():
         _obstaculos_timer = .20
 
     # --- correr / energia ---
-    moviendo = held_keys['w'] or held_keys['a'] or held_keys['s'] or held_keys['d']
-    correr = held_keys['left shift'] and moviendo and S.puede_correr
+    moviendo = _held_keys['w'] or _held_keys['a'] or _held_keys['s'] or _held_keys['d']
+    correr = _held_keys['left shift'] and moviendo and S.puede_correr
     if correr:
         S.stamina -= 28 * dt
         if S.stamina <= 0:
@@ -1337,7 +1337,7 @@ def update():
 
     # --- zoom al apuntar ---
     objetivo_fov = 90
-    if held_keys['right mouse']:
+    if _held_keys['right mouse']:
         objetivo_fov = 30 if ARMAS[S.arma]['penetra'] > 1 else 70
     camera.fov = lerp(camera.fov, objetivo_fov, min(1, 12 * dt))
 
@@ -1349,7 +1349,7 @@ def update():
             n = min(stat(S.arma, 'cargador') - S.mag[S.arma], S.reserva[S.arma])
             S.mag[S.arma] += n
             S.reserva[S.arma] -= n
-    if held_keys['left mouse'] and ARMAS[S.arma]['auto']:
+    if _held_keys['left mouse'] and ARMAS[S.arma]['auto']:
         disparar()
     S.retroceso = max(0, S.retroceso - dt * 9)
     arma_modelo.z = .9 - .12 * S.retroceso
@@ -1423,7 +1423,7 @@ def input(key):
         if key == 'enter':
             iniciar()
         elif key == 'escape':
-            _application.quit()
+            __application.quit()
 
     elif S.estado == 'jugando':
         if key in ('escape', 'p'):
@@ -1473,13 +1473,13 @@ def input(key):
         if key in ('escape', 'p'):
             reanudar()
         elif key == 'q':
-            application.quit()
+            _application.quit()
 
     elif S.estado == 'fin':
         if key in ('r', 'enter'):
             iniciar()
         elif key == 'escape':
-            application.quit()
+            _application.quit()
 
 
 poner(txt_menu_record, f'Record: {S.record}')
