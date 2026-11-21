@@ -541,32 +541,37 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 local function startWaves()
-	if waveRunning then return end; waveRunning=true
+	if waveRunning then return end
+	waveRunning=true
 	task.spawn(function()
 		while waveRunning do
-			if wave==0 or (intermission<=0 and #spawnQueue==0 and enemyCount==0) then
-				spawnWave(); intermission=0
-			end
-			if #spawnQueue>0 and enemyCount<Config.MaxEnemiesAlive then
-				local kind=table.remove(spawnQueue,1); createEnemy(kind)
-				task.wait(math.max(.45,1.5-.06*wave))
-			elseif #spawnQueue==0 and enemyCount==0 then
+			if wave==0 then
+				spawnWave()
+			elseif intermission>0 then
+				intermission=math.max(0,intermission-1)
+				for player in pairs(data) do sendState(player) end
+				task.wait(1)
+			elseif #spawnQueue>0 then
+				if enemyCount<Config.MaxEnemiesAlive then
+					local kind=table.remove(spawnQueue,1)
+					createEnemy(kind)
+					task.wait(math.max(.45,1.5-.06*wave))
+				else
+					task.wait(.25)
+				end
+			elseif enemyCount==0 then
 				local bonus=100*wave
 				for player in pairs(data) do
-					award(player,bonus); local h=humanoidOf(player); if h then h.Health=math.min(h.MaxHealth,h.Health+15) end; allAmmo(player,.5)
-					notify(player,"Oleada superada: +"..bonus,Color3.fromRGB(110,245,130)); sendState(player)
+					award(player,bonus)
+					local h=humanoidOf(player)
+					if h then h.Health=math.min(h.MaxHealth,h.Health+15) end
+					allAmmo(player,.5)
+					notify(player,"Oleada superada: +"..bonus,Color3.fromRGB(110,245,130))
+					sendState(player)
 				end
 				intermission=Config.IntermissionSeconds
-				task.wait(1)
-			else task.wait(.25) end
-			if intermission>0 then
-				local finish=os.clock()+intermission
-				while os.clock()<finish and waveRunning do
-					intermission=math.max(0,finish-os.clock())
-					for player in pairs(data) do sendState(player) end
-					task.wait(1)
-				end
-				intermission=0
+			else
+				task.wait(.25)
 			end
 		end
 	end)
