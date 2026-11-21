@@ -1,6 +1,7 @@
 from ursina import *
 from ursina.prefabs.first_person_controller import FirstPersonController
 from types import SimpleNamespace
+from typing import Any
 import random
 import math
 
@@ -8,6 +9,13 @@ from .config import *
 from .audio import *
 
 app = Ursina(title='Cazador de Oleadas v2')
+# Ursina exposes several runtime proxies that its type stubs model incompletely.
+_held_keys: Any = held_keys
+_ursina_time: Any = time
+_application: Any = application
+_app: Any = app
+_entity_factory: Any = Entity
+_text_factory: Any = Text
 window.color = color.black
 try:
     window.exit_button.visible = False
@@ -110,7 +118,7 @@ def reserva_max(i):
 # =====================================================================
 #  ESCENARIO
 # =====================================================================
-suelo = Entity(model='plane', scale=ARENA * 2, texture='grass', texture_scale=(40, 40), collider='box')
+suelo = _entity_factory(model='plane', scale=ARENA * 2, texture='grass', texture_scale=(40, 40), collider='box')
 Sky()
 
 largo = ARENA * 2 + 2
@@ -139,7 +147,7 @@ for _ in range(16):
 #  JUGADOR Y ARMA
 # =====================================================================
 jugador = FirstPersonController(position=(0, 1, 0))
-jugador.speed = 5.5
+setattr(jugador, 'speed', 5.5)
 jugador.enabled = False
 mouse.visible = True
 mouse.locked = False
@@ -190,7 +198,7 @@ def texto(txt, pos, esc=1.2, col=color.white, centro=False, padre=None):
     kw = dict(parent=padre if padre else hud, text=txt, position=pos, scale=esc, color=col)
     if centro:
         kw['origin'] = (0, 0)
-    t = Text(**kw)
+    t = _text_factory(**kw)
     t._ult = txt
     return t
 
@@ -642,7 +650,8 @@ class Enemigo(Entity):
 
 class Proyectil(Entity):
     def __init__(self, pos, direccion, dano):
-        super().__init__(model='sphere', color=color.cyan, scale=.45, position=pos)
+        _entity_init: Any = super().__init__
+        _entity_init(model='sphere', color=color.cyan, scale=.45, position=pos)
         self.direccion = direccion
         self.dano = dano
         self.vida = 5
@@ -653,7 +662,8 @@ class Recogible(Entity):
         modelo, col = {'salud': ('sphere', color.lime),
                        'municion': ('cube', color.gold),
                        'dano': ('cube', color.magenta)}[tipo]
-        super().__init__(model=modelo, color=col, scale=.6, position=Vec3(pos.x, 1, pos.z))
+        _entity_init: Any = super().__init__
+        _entity_init(model=modelo, color=col, scale=.6, position=Vec3(pos.x, 1, pos.z))
         if tipo == 'dano':
             self.rotation_x = 45
             self.rotation_z = 45
@@ -666,7 +676,8 @@ class Dron(Entity):
     """Dron de combate que orbita al jugador y dispara al enemigo mas cercano."""
 
     def __init__(self, idx):
-        super().__init__(model='sphere', color=color.cyan, scale=.4, position=jugador.world_position)
+        _entity_init: Any = super().__init__
+        _entity_init(model='sphere', color=color.cyan, scale=.4, position=jugador.world_position)
         Entity(parent=self, model='cube', color=color.black, scale=(.5, .5, 1.6), z=.6)
         self.idx = idx
         self.ang = idx * 2.1
@@ -790,7 +801,7 @@ def disparar():
     origen = camera.world_position
     muzzle = arma_modelo.world_position + camera.forward * .8
     dano_base = stat(S.arma, 'dano') * (2 if S.buff_t > 0 else 1)
-    disp = a['dispersion'] * (.4 if held_keys['right mouse'] else 1)
+    disp = a['dispersion'] * (.4 if _held_keys['right mouse'] else 1)
 
     for _ in range(a['perdigones']):
         v = (camera.forward + Vec3(random.uniform(-1, 1), random.uniform(-1, 1),
@@ -1275,7 +1286,7 @@ def actualizar_hud(dt):
 def update():
     if S.estado != 'jugando':
         return
-    dt = min(time.dt, .05)
+    dt = min(float(getattr(_ursina_time, 'dt', 0.0)), .05)
     S.t += dt
 
     global _obstaculos_timer
@@ -1297,7 +1308,7 @@ def update():
         if S.stamina > 25:
             S.puede_correr = True
     factor_vel = 1 + .08 * S.perks['vel']
-    jugador.speed = (9 if correr else 5.5) * factor_vel
+    setattr(jugador, 'speed', (9 if correr else 5.5) * factor_vel)
 
     # --- temporizadores ---
     S.buff_t = max(0, S.buff_t - dt)
@@ -1412,7 +1423,7 @@ def input(key):
         if key == 'enter':
             iniciar()
         elif key == 'escape':
-            application.quit()
+            _application.quit()
 
     elif S.estado == 'jugando':
         if key in ('escape', 'p'):
@@ -1474,4 +1485,4 @@ def input(key):
 poner(txt_menu_record, f'Record: {S.record}')
 aplicar_arma()
 def run():
-    app.run()
+    _app.run()
