@@ -401,121 +401,86 @@ POS_FILAS = (
 )
 filas = [texto("", p, 0.95, color.white, False, ui_tienda) for p in POS_FILAS]
 
-# --- HUD EN PARTIDA (Diseño de referencia) ---[cite: 5]
-# 1. Arriba izquierda: OLEADA, RÉCORD, ENEMIGOS + barra, Puntos y Créditos[cite: 5]
-panel_hud((-0.68, 0.41), (0.54, 0.21))
-txt_oleada = texto("", (-0.92, 0.475), 1.25, color.white)
-txt_record = texto("", (-0.45, 0.482), 0.62, color.light_gray)
-txt_enemigos = texto("", (-0.92, 0.432), 0.65, color.light_gray)
-txt_hint = texto("", (-0.45, 0.432), 0.65, color.white)
-barra_enemigos = barra((-0.68, 0.408), (0.46, 0.010), color.rgb(225, 65, 75))
-txt_puntos = texto("", (-0.92, 0.365), 0.75, color.light_gray)
-txt_cred = texto("", (-0.45, 0.365), 0.78, color.rgb(245, 195, 65))
+# --- HUD GENERAL ---
+def panel_hud(pos, escala, alpha=.90):
+    return _entity_factory(parent=hud, model='quad',
+                           position=(pos[0], pos[1], .65), scale=escala,
+                           color=Vec4(.025, .035, .05, alpha))
 
-# Indicadores adicionales discretos bajo la tarjeta superior izquierda
-txt_combo = texto("", (-0.92, 0.285), 0.72, color.orange)
-txt_buff = texto("", (-0.92, 0.250), 0.66, color.magenta)
-txt_furia = texto("", (-0.64, 0.250), 0.66, color.orange)
 
-# 2. Arriba centro: Cápsula de aviso / combo y hitmarker[cite: 5]
-panel_hud((0, 0.445), (0.44, 0.065), alpha=0.85)
-acento_hud((-0.216, 0.445), (0.008, 0.065), color.rgb(245, 185, 55))
-txt_aviso = texto("", (0, 0.445), 0.95, color.white, True)
-hitmarker = texto("x", (0, 0), 2.2, color.white, True)
+def acento_hud(pos, escala, col=None):
+    return _entity_factory(parent=hud, model='quad',
+                           position=(pos[0], pos[1], .62), scale=escala,
+                           color=col or color.rgb(220, 45, 62))
+
+
+# Estadisticas: una tarjeta, tres filas y dos columnas bien separadas.
+panel_hud((-.69, .43), (.57, .19))
+acento_hud((-.69, .521), (.57, .004))
+txt_puntos = texto('', (-.94, .465), .92, color.white)
+txt_cred = texto('', (-.66, .465), .88, color.gold)
+txt_record = texto('', (-.94, .415), .78, color.light_gray)
+txt_combo = texto('', (-.66, .415), .78, color.orange)
+txt_buff = texto('', (-.94, .365), .68, color.magenta)
+txt_furia = texto('', (-.66, .365), .68, color.orange)
+
+# Oleada: jerarquia clara entre numero, situacion y ayuda.
+panel_hud((0, .435), (.40, .17))
+acento_hud((0, .518), (.40, .004))
+txt_oleada = texto('', (0, .47), 1.35, color.white, True)
+txt_enemigos = texto('', (0, .418), .78, color.light_gray, True)
+txt_hint = texto('', (0, .372), .68, color.yellow, True)
+txt_aviso = texto('', (0, .2), 2.4, color.white, True)
+hitmarker = texto('x', (0, 0), 2.5, color.white, True)
 hitmarker.enabled = False
 
-# 3. Arriba derecha: Radar circular con marca Norte[cite: 5]
-_entity_factory(
-    parent=hud,
-    model="circle",
-    scale=0.25,
-    position=(0.80, 0.33),
-    color=Vec4(0.04, 0.055, 0.075, 0.85),
-    z=0.60,
-)
-radar = _entity_factory(
-    parent=hud,
-    model="circle",
-    scale=0.22,
-    position=(0.80, 0.33),
-    color=Vec4(0.02, 0.03, 0.045, 0.92),
-    z=0.58,
-)
-texto("N", (0.80, 0.465), 0.62, color.light_gray, True)
-_entity_factory(parent=radar, model="circle", scale=0.04, color=color.white, z=-0.02)
-_entity_factory(
-    parent=radar,
-    model="circle",
-    scale=0.65,
-    color=Vec4(0.25, 0.35, 0.45, 0.20),
-    z=-0.015,
-)
-puntos_radar = []
+# Estado del jugador: etiquetas separadas de sus barras.
+panel_hud((-.70, -.42), (.57, .18))
+acento_hud((-.70, -.333), (.57, .004))
+txt_vida = texto('', (-.94, -.365), .76, color.white)
+txt_stamina = texto('', (-.94, -.445), .70, color.azure)
 
-# 4. Abajo izquierda: VIDA, valor, barra de vida, barra de resistencia y RESISTENCIA[cite: 5]
-panel_hud((-0.68, -0.42), (0.54, 0.16))
-txt_vida = texto("", (-0.92, -0.365), 0.72, color.light_gray)
-barra_vida = barra((-0.68, -0.398), (0.46, 0.018), color.rgb(45, 205, 115))
-barra_stamina = barra((-0.68, -0.426), (0.46, 0.010), color.rgb(55, 175, 235))
-txt_stamina = texto("", (-0.92, -0.462), 0.65, color.light_gray)
 
-# 5. Abajo centro: 4 habilidades en fila con etiqueta de tecla debajo[cite: 5]
+def barra(pos, tam, col):
+    bg = _entity_factory(parent=hud, model='quad',
+                         color=color.rgb(38, 48, 62), scale=tam,
+                         position=(pos[0], pos[1], .1))
+    return _entity_factory(parent=bg, model='quad', color=col,
+                           origin_x=-.5, x=-.5, z=-.01, scale=(1, 1))
+
+
+barra_vida = barra((-.70, -.405), (.45, .018), color.rgb(230, 65, 78))
+barra_stamina = barra((-.70, -.485), (.45, .014), color.rgb(55, 165, 225))
+
+# Habilidades: cuatro celdas iguales, alineadas en una sola fila.
+panel_hud((.17, -.43), (.75, .16))
 txt_hab = {}
-for xh, k in zip((-0.15, -0.05, 0.05, 0.15), HABS):
-    _entity_factory(
-        parent=hud,
-        model="circle",
-        scale=0.085,
-        position=(xh, -0.39),
-        color=Vec4(0.04, 0.055, 0.075, 0.88),
-        z=0.60,
-    )
-    txt_hab[k] = texto("", (xh, -0.39), 0.62, color.white, True)
-    tecla_lbl = HABS[k][0].upper() if isinstance(HABS, dict) else str(k)[0].upper()
-    panel_hud((xh, -0.465), (0.032, 0.032), alpha=0.90, z=0.61)
-    texto(tecla_lbl, (xh, -0.465), 0.58, color.white, True)
-= texto("", (0.85, -0.42), 0.85, color.white, True)
+for xh, k in zip((-.10, .09, .28, .47), HABS):
+    panel_hud((xh, -.43), (.17, .125), alpha=.96)
+    acento_hud((xh, -.369), (.17, .003), color.rgb(70, 86, 105))
+    txt_hab[k] = texto('', (xh, -.43), .70, color.white, True)
 
-# 7. Retícula central minimalista[cite: 5]
-for dx, dy, sx, sy in (
-    (-0.012, 0, 0.008, 0.0016),
-    (0.012, 0, 0.008, 0.0016),
-    (0, 0.012, 0.0016, 0.008),
-    (0, -0.012, 0.0016, 0.008),
-):
-    _entity_factory(
-        parent=hud,
-        model="quad",
-        color=color.white,
-        position=(dx, dy, 0.52),
-        scale=(sx, sy),
-    )
-# 6. Abajo derecha: Slots de arma encima + panel de munición[cite: 5]
-slots_arma = {}
-for idx, (xs, label) in enumerate(
-    zip((0.52, 0.62, 0.72, 0.82), ("1 Pistola", "2 Rifle", "3 Escopeta", "4 $600"))
-):
-    panel_hud((xs, -0.305), (0.092, 0.055), alpha=0.82)
-    slots_arma[idx] = texto(label, (xs, -0.305), 0.55, color.light_gray, True)
+# Municion/estado actual en un espacio propio, sin invadir las habilidades.
+panel_hud((.80, -.43), (.34, .16))
+acento_hud((.80, -.353), (.34, .004), color.rgb(70, 86, 105))
+txt_arma = texto('', (.80, -.425), .78, color.white, True)
 
-panel_hud((0.67, -0.42), (0.41, 0.16))
-txt_arma = texto("", (0.85, -0.42), 0.85, color.white, True)
+# Reticula central minimalista.
+for dx, dy, sx, sy in ((-.010, 0, .007, .0015), (.010, 0, .007, .0015),
+                       (0, .010, .0015, .007), (0, -.010, .0015, .007)):
+    _entity_factory(parent=hud, model='quad', color=color.white,
+                    position=(dx, dy), scale=(sx, sy))
 
-# 7. Retícula central minimalista[cite: 5]
-for dx, dy, sx, sy in (
-    (-0.012, 0, 0.008, 0.0016),
-    (0.012, 0, 0.008, 0.0016),
-    (0, 0.012, 0.0016, 0.008),
-    (0, -0.012, 0.0016, 0.008),
-):
-    _entity_factory(
-        parent=hud,
-        model="quad",
-        color=color.white,
-        position=(dx, dy, 0.52),
-        scale=(sx, sy),
-    )
-
+# Radar compacto en la esquina superior derecha.
+_entity_factory(parent=hud, model='circle', scale=.245,
+                position=(.78, .285, .04), color=Vec4(.12, .17, .23, .95))
+radar = _entity_factory(parent=hud, model='circle', scale=.22,
+                        position=(.78, .285, .02), color=Vec4(.015, .03, .05, .94))
+_entity_factory(parent=radar, model='circle', scale=.035,
+                color=color.white, z=-.02)
+_entity_factory(parent=radar, model='circle', scale=.72,
+                color=Vec4(.2, .3, .4, .28), z=-.015)
+puntos_radar = []
 
 # =====================================================================
 #  UTILIDADES Y EFECTOS
@@ -1671,59 +1636,46 @@ def actualizar_radar():
 
 def actualizar_hud(dt):
     a = ARMAS[S.arma]
-    poner(txt_puntos, f"Puntos {S.puntos:,}".replace(",", " "))
-    poner(txt_record, f"RÉCORD {max(S.record, S.puntos):,}".replace(",", " "))
-    poner(txt_cred, f"$ {S.creditos:,}".replace(",", " "))
-    poner(txt_oleada, f"OLEADA {S.oleada}")
-
-    total_en = len(enemigos) + len(S.cola)
+    poner(txt_puntos, f'PUNTOS  {S.puntos:,}'.replace(',', '.'))
+    poner(txt_record, f'RECORD  {max(S.record, S.puntos):,}'.replace(',', '.'))
+    poner(txt_cred, f'CREDITOS  ${S.creditos:,}'.replace(',', '.'))
+    poner(txt_oleada, f'OLEADA  {S.oleada:02d}')
     if S.intermedio > 0:
-        poner(txt_enemigos, "PREPARACIÓN")
-        poner(txt_hint, f"{int(S.intermedio) + 1}s · B")
-        barra_enemigos.scale_x = 0.001
+        poner(txt_enemigos, 'PREPARACION DE OLEADA')
+        poner(txt_hint, f'Comienza en {int(S.intermedio) + 1}s  ·  B: tienda')
     else:
-        poner(txt_enemigos, "ENEMIGOS")
-        poner(txt_hint, f"{total_en}")
-        max_en = max(getattr(S, "enemigos_oleada_total", total_en), total_en, 1)
-        barra_enemigos.scale_x = clamp(total_en / max_en, 0.001, 1)
-
-    poner(txt_combo, f"COMBO x{mult_combo():.1f}" if S.combo > 1 else "")
-    poner(txt_buff, f"DANO x2 {int(S.buff_t) + 1}s" if S.buff_t > 0 else "")
-    poner(txt_furia, f"FURIA {int(S.furia_t) + 1}s" if S.furia_t > 0 else "")
-
-    salud_max = max(S.salud_max, 1)
-    poner(txt_vida, f"VIDA   {int(S.salud)} / {S.salud_max}")
-    poner(txt_stamina, f"RESISTENCIA   {int(S.stamina)}%")
-
+        poner(txt_enemigos, f'EN CURSO  ·  {len(enemigos) + len(S.cola)} enemigos')
+        poner(txt_hint, '')
+    poner(txt_combo, f'COMBO  x{mult_combo():.1f}' if S.combo > 1 else '')
+    poner(txt_buff, f'DANO x2  {int(S.buff_t) + 1}s' if S.buff_t > 0 else '')
+    poner(txt_furia, f'FURIA  {int(S.furia_t) + 1}s' if S.furia_t > 0 else '')
+    poner(txt_vida, f'VIDA  {int(S.salud)}/{S.salud_max}')
+    poner(txt_stamina, f'RESISTENCIA  {int(S.stamina)}%')
     if S.recarga > 0:
         estado_arma = "RECARGANDO..."
     elif S.furia_t > 0:
-        estado_arma = "INFINITA"
+        estado_arma = 'INFINITA'
     else:
-        estado_arma = f"{S.mag[S.arma]} / {S.reserva[S.arma]}"
+        estado_arma = f'{S.mag[S.arma]} / {S.reserva[S.arma]}'
     poner(txt_arma, f'{a["nombre"].upper()}\n{estado_arma}')
-
-    barra_vida.scale_x = clamp(S.salud / salud_max, 0.001, 1)
-    barra_stamina.scale_x = clamp(S.stamina / 100, 0.001, 1)
-
-    for idx, lbl in slots_arma.items():
-        lbl.color = color.rgb(245, 195, 65) if idx == S.arma else color.light_gray
+    barra_vida.scale_x = max(S.salud / S.salud_max, .001)
+    barra_stamina.scale_x = max(S.stamina / 100, .001)
 
     for k, (tecla, nombre) in HABS.items():
         cd = S.cdh[k]
-        if k == "furia" and S.furia_t > 0:
-            s, col = f"{tecla}\nACTIVA", color.rgb(245, 165, 75)
+        if k == 'furia' and S.furia_t > 0:
+            s, col = f'{tecla}  {nombre}\nACTIVA', color.rgb(245, 165, 75)
         elif cd > 0:
-            s, col = f"{tecla}\n{cd:.1f}s", color.rgb(155, 166, 180)
+            s, col = f'{tecla}  {nombre}\n{cd:.1f}s', color.rgb(155, 166, 180)
         else:
-            s, col = f"{tecla}\n{nombre[:4].upper()}", color.rgb(105, 215, 155)
+            s, col = f'{tecla}  {nombre}\nLISTA', color.rgb(105, 215, 155)
         poner(txt_hab[k], s)
         txt_hab[k].color = col
 
     if S.aviso_t > 0:
-        S.aviso_t = max(0, S.aviso_t - dt)
-        if S.aviso_t == 0:
-            poner(txt_aviso, "")
+        S.aviso_t -= dt
+        if S.aviso_t <= 0:
+            poner(txt_aviso, '')
 
     S.hit_t = max(0, S.hit_t - dt)
     visible = S.hit_t > 0
@@ -1733,8 +1685,8 @@ def actualizar_hud(dt):
         hitmarker.color = color.red if S.hit_cab else color.white
 
     S.dano_alpha = max(0, S.dano_alpha - dt * 1.5)
-    extra = 0.12 if S.salud < salud_max * 0.3 else 0
-    overlay_dano.color = Vec4(1, 0, 0, clamp(S.dano_alpha + extra, 0, 1))
+    extra = .12 if S.salud < S.salud_max * .3 else 0
+    overlay_dano.color = Vec4(1, 0, 0, S.dano_alpha + extra)
 
     S.fogonazo = max(0, S.fogonazo - dt)
     f = S.fogonazo > 0
