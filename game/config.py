@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Any
+
 from ursina import color
 
 
@@ -8,7 +10,7 @@ RADAR_RANGE = 30
 RECORD_FILE = Path(__file__).resolve().parent.parent / 'record.txt'
 INTERMEDIO = 20       # segundos entre oleadas
 
-TIPOS = {
+TIPOS: dict[str, dict[str, Any]] = {
     'normal':  dict(hp=40,  vel=3.6, dano=10, color=color.red,     escala=(1.0, 1.8, 1.0), puntos=10,
                     ranged=False, dispara=False),
     'rapido':  dict(hp=22,  vel=6.8, dano=7,  color=color.orange,  escala=(0.8, 1.4, 0.8), puntos=15,
@@ -21,7 +23,7 @@ TIPOS = {
                     ranged=False, dispara=True),
 }
 
-ARMAS = [
+ARMAS: list[dict[str, Any]] = [
     dict(nombre='Pistola', dano=28, cadencia=.28, cargador=12, reserva_ini=48, reserva_max=120,
          recarga=1.0, perdigones=1, dispersion=.004, auto=False, kick=.8, explosion=0, penetra=1,
          precio=0, color=color.dark_gray, escala=(.10, .14, .50),
@@ -44,10 +46,10 @@ ARMAS = [
          desc='Explosion en area (radio 6). Ideal contra hordas.'),
 ]
 
-HABS = {'dash': ('Q', 'Dash'), 'onda': ('E', 'Onda'), 'torreta': ('F', 'Torreta'), 'furia': ('C', 'Furia')}
+HABS: dict[str, tuple[str, str]] = {'dash': ('Q', 'Dash'), 'onda': ('E', 'Onda'), 'torreta': ('F', 'Torreta'), 'furia': ('C', 'Furia')}
 CD_BASE = dict(dash=5, onda=14, torreta=18, furia=45)
 
-MEJORAS_ARMA = [
+MEJORAS_ARMA: list[tuple[str, str, int, str]] = [
     ('dano', 'Dano', 120, '+25% de dano por nivel.'),
     ('carga', 'Cargador', 80, '+25% de cargador y de municion maxima. Rellena el cargador.'),
     ('cad', 'Cadencia', 100, 'Dispara 10% mas rapido por nivel.'),
