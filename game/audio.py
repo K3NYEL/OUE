@@ -21,7 +21,7 @@ def cargar_audio(nombres, volumen):
         ruta = AUDIO_DIR / nombre
         if ruta.is_file():
             try:
-                return Audio(str(ruta), autoplay=False, volume=volumen)
+                return Audio(ruta, autoplay=False, volume=volumen)
             except Exception as exc:
                 print(f'[AUDIO] No se pudo cargar {ruta}: {exc}')
                 return None
