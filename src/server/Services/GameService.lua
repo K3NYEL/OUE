@@ -102,7 +102,7 @@ local function sendState(player: Player)
 		Points=d.Points,Credits=d.Credits,Record=math.max(d.Record,d.Points),Kills=d.Kills,
 		Wave=wave,Enemies=enemyCount + #spawnQueue,Intermission=intermission,RadarEnemies=radarEnemies,
 		Weapon=d.Weapon,Magazine=mags,Reserve=reserves,Unlocked=d.Unlocked,
-		Cooldowns=d.Cooldowns,Fury=math.max(0,d.FuryUntil-os.clock()),
+		Cooldowns={dash=math.max(0,Config.Abilities.dash.Cooldown*(.85^d.Abilities.dash)-(os.clock()-d.LastDash)),onda=math.max(0,Config.Abilities.onda.Cooldown*(.85^d.Abilities.onda)-(os.clock()-d.LastShock)),torreta=math.max(0,Config.Abilities.torreta.Cooldown*(.85^d.Abilities.torreta)-(os.clock()-d.LastTurret)),furia=math.max(0,Config.Abilities.furia.Cooldown*(.85^d.Abilities.furia)-(os.clock()-d.LastFury))},Fury=math.max(0,d.FuryUntil-os.clock()),
 		Stamina=d.Stamina,Combo=d.Combo,Perks=d.Perks,Abilities=d.Abilities,
 	})
 end
