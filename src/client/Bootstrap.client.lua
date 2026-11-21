@@ -122,7 +122,6 @@ end)
 UIS.InputChanged:Connect(function(input)
  if input.UserInputType==Enum.UserInputType.MouseWheel and current.Weapon then local i=((current.Weapon+(if input.Position.Z>0 then 1 else -1)-1)%#Config.Weapons)+1; Action:FireServer("Equip",i) end
 end)
-RunService.RenderStepped:Connect(function() updateViewmodel(); if firing and not shopOpen then local w=Config.Weapons[current.Weapon or 1]; if w and w.Automatic then fire() end end end)
 player.CharacterAdded:Connect(function() toggleShop(false); UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false end)
 UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false
 
@@ -156,3 +155,5 @@ local function updateViewmodel()
  vmMuzzle.CFrame=cam.CFrame*CFrame.new(.48,-.34,-1.56)
  vmFlash.CFrame=cam.CFrame*CFrame.new(.48,-.34,-1.7)
 end
+
+RunService.RenderStepped:Connect(function() updateViewmodel(); if firing and not shopOpen then local w=Config.Weapons[current.Weapon or 1]; if w and w.Automatic then fire() end end end)
