@@ -2137,8 +2137,43 @@ def actualizar_hud(dt):
         fogonazo.enabled = f
 
 
+# Captura de rendimiento: una muestra agregada cada 5 segundos.
+_fps_tiempo = 0.0
+_fps_frames = 0
+_fps_minimo = float("inf")
+_fps_maximo = 0.0
+
+
+def capturar_fps(dt):
+    """Mide FPS reales y registra un resumen periódico en la consola."""
+    global _fps_tiempo, _fps_frames, _fps_minimo, _fps_maximo
+    if dt <= 0:
+        return
+
+    fps_actual = 1.0 / dt
+    _fps_tiempo += dt
+    _fps_frames += 1
+    _fps_minimo = min(_fps_minimo, fps_actual)
+    _fps_maximo = max(_fps_maximo, fps_actual)
+
+    if _fps_tiempo >= 5.0:
+        fps_promedio = _fps_frames / _fps_tiempo
+        print(
+            f"[FPS] estado={S.estado} | oleada={S.oleada} | "
+            f"actual={fps_actual:.1f} | promedio={fps_promedio:.1f} | "
+            f"min={_fps_minimo:.1f} | max={_fps_maximo:.1f} | "
+            f"enemigos={len(enemigos)} | proyectiles={len(proyectiles)}"
+        )
+        _fps_tiempo = 0.0
+        _fps_frames = 0
+        _fps_minimo = float("inf")
+        _fps_maximo = 0.0
+
+
 def update():
-    dt = min(float(getattr(_ursina_time, "dt", 0.0)), 0.05)
+    dt_real = float(getattr(_ursina_time, "dt", 0.0))
+    capturar_fps(dt_real)
+    dt = min(dt_real, 0.05)
     if S.estado == "tienda":
         actualizar_tienda(dt)
         return
