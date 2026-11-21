@@ -440,16 +440,24 @@ local function buy(player: Player, category: string, key: string, requestedIndex
 	local d=data[player]; if not d then return end
 	local cost=0; local action: (() -> ())?=nil
 	if category=="weapon" then
-		local index=tonumber(key); if not index or not Config.Weapons[index] then return end
+		local index=tonumber(key) or (requestedIndex and math.clamp(math.floor(requestedIndex),1,#Config.Weapons)) or d.Weapon
+		if not Config.Weapons[index] then return end
 		local w=Config.Weapons[index]
-		if not d.Unlocked[index] then cost=w.Price; action=function() d.Unlocked[index]=true; d.Weapon=index end
+		if tonumber(key) and not d.Unlocked[index] then
+			cost=w.Price
+			action=function() d.Unlocked[index]=true; d.Weapon=index end
 		else
+			if not d.Unlocked[index] then notify(player,"Primero desbloquea el arma"); return end
 			local upgrade
 			for _,item in ipairs(Config.WeaponUpgrades) do if item.Key==key then upgrade=item end end
 			if not upgrade then return end
-			local level=d.WeaponLevels[index][key] or 0; if level>=5 then notify(player,"Mejora al maximo"); return end
+			local level=d.WeaponLevels[index][key] or 0
+			if level>=5 then notify(player,"Mejora al maximo"); return end
 			cost=upgradeCost(upgrade.Cost,level)
-			action=function() d.WeaponLevels[index][key]=level+1; if key=="Magazine" then d.Magazine[index]=math.floor(w.Magazine*(1+.25*(level+1))+.5) end end
+			action=function()
+				d.WeaponLevels[index][key]=level+1
+				if key=="Magazine" then d.Magazine[index]=math.floor(w.Magazine*(1+.25*(level+1))+.5) end
+			end
 		end
 	elseif category=="perk" then
 		local perk; for _,item in ipairs(Config.Perks) do if item.Key==key then perk=item end end
