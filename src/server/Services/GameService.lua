@@ -540,6 +540,7 @@ local function setupPlayer(player: Player)
 	if ok and typeof(record)=="number" then d.Record=record end
 	player.CharacterAdded:Connect(function(character)
 		local hum=character:WaitForChild("Humanoid") :: Humanoid
+		d.Paused=false; d.Sprinting=false
 		hum.MaxHealth=100+20*d.Perks.Health; hum.Health=hum.MaxHealth; hum.WalkSpeed=16*(1+.08*d.Perks.Speed)
 		hum.HealthChanged:Connect(function() sendState(player) end)
 		hum.Died:Connect(function()
