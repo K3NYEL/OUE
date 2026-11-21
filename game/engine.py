@@ -7,6 +7,8 @@ import math
 
 from .config import *
 from .audio import *
+from .balistica import Retroceso, Bloom, direccion_en_cono
+from .miras import crear_miras, _textura_anillo
 
 app = Ursina(title="Cazador de Oleadas v2")
 # Ursina exposes several runtime proxies that its type stubs model incompletely.
@@ -67,6 +69,7 @@ def nuevo_estado(record):
         furia_t=0,
         tienda_arma=0,
         tienda_sel=0,
+        tienda_tab=0,
         cd=0,
         recarga=0,
         retroceso=0,
@@ -86,6 +89,8 @@ def nuevo_estado(record):
 S = SimpleNamespace()
 vars(S).update(nuevo_estado(leer_record()))
 
+retro = Retroceso()   # retroceso acumulado con recuperacion (balistica.py)
+bloom = Bloom()       # dispersion creciente por rafaga
 enemigos, proyectiles, recogibles, torretas, drones = [], [], [], [], []
 ITEMS = []
 
@@ -96,8 +101,9 @@ MAX_ANILLOS = 10
 EFECTOS_ACTIVOS = {"particula": [], "rayo": [], "anillo": []}
 GRID_ENEMIGOS = {}
 GRID_CELDA = 6.5
-RADAR_INTERVALO = 0.10
-HUD_INTERVALO = 0.10
+RADAR_INTERVALO = 0.05
+HUD_INTERVALO = 0.05
+TIENDA_CONTADOR = True   # la cuenta atras de la oleada sigue corriendo dentro de la tienda
 
 # Culling visual: los modelos fuera del campo de vision o demasiado lejos
 # no mantienen sus subentidades/renderers activos. La IA sigue funcionando.
@@ -256,6 +262,7 @@ fogonazo = _entity_factory(
 #  INTERFAZ
 # =====================================================================
 hud = _entity_factory(parent=camera.ui, enabled=False)
+hud_info = _entity_factory(parent=hud)   # todo el HUD salvo retícula, miras y hitmarker
 ui_menu = _entity_factory(parent=camera.ui)
 ui_pausa = _entity_factory(parent=camera.ui, enabled=False)
 ui_fin = _entity_factory(parent=camera.ui, enabled=False)
@@ -265,14 +272,14 @@ overlay_dano = _entity_factory(
 )
 
 
-def texto(txt, pos, esc=1.2, col=color.white, centro=False, padre=None):
+def texto(txt, pos, esc=1.2, col=color.white, centro=False, padre=None, der=False):
     kw = dict(
-        parent=padre if padre else hud,
+        parent=padre if padre else hud_info,
         text=txt,
         position=pos,
         scale=esc,
         color=col,
-        origin=(0, 0) if centro else (-0.5, 0),
+        origin=(0, 0) if centro else ((0.5, 0) if der else (-0.5, 0)),
     )
     t = _text_factory(**kw)
     t._ult = txt
@@ -285,37 +292,37 @@ def poner(t, s):
         t._ult = s
 
 
-def fondo(padre):
+def fondo(padre, alfa=0.75, col=(0, 0, 0)):
     _entity_factory(
-        parent=padre, model="quad", scale=(4, 2), color=Vec4(0, 0, 0, 0.75), z=1
+        parent=padre, model="quad", scale=(4, 2), color=Vec4(*col, alfa), z=1
     )
 
 
-def panel_hud(pos, escala, alpha=0.82, z=0.65):
+def panel_hud(pos, escala, alpha=0.80, z=0.65, padre=None):
     return _entity_factory(
-        parent=hud,
+        parent=padre if padre else hud_info,
         model="quad",
         position=(pos[0], pos[1], z),
         scale=escala,
-        color=Vec4(0.04, 0.055, 0.075, alpha),
+        color=Vec4(0.045, 0.058, 0.078, alpha),
     )
 
 
-def acento_hud(pos, escala, col=None, z=0.62):
+def acento_hud(pos, escala, col=None, z=0.62, padre=None):
     return _entity_factory(
-        parent=hud,
+        parent=padre if padre else hud_info,
         model="quad",
         position=(pos[0], pos[1], z),
         scale=escala,
-        color=col or color.rgb(220, 65, 75),
+        color=col or color.rgb(225, 65, 75),
     )
 
 
-def barra(pos, tam, col, z=0.58):
+def barra(pos, tam, col, z=0.55):
     bg = _entity_factory(
-        parent=hud,
+        parent=hud_info,
         model="quad",
-        color=color.rgb(28, 36, 48),
+        color=rgb255(36, 44, 58),
         scale=tam,
         position=(pos[0], pos[1], z),
     )
@@ -326,7 +333,7 @@ def barra(pos, tam, col, z=0.58):
         origin=(-0.5, 0),
         x=-0.5,
         z=-0.01,
-        scale=(1, 1),
+        scale=(1.0, 1.0),
     )
 
 
@@ -376,111 +383,338 @@ texto(
     ui_fin,
 )
 
-# --- tienda ---
-fondo(ui_tienda)
-txt_tienda_cred = texto("", (0, 0.46), 1.8, color.gold, True, ui_tienda)
-txt_hdr_arma = texto("", (-0.86, 0.38), 1.1, color.orange, False, ui_tienda)
-texto("MEJORAS PASIVAS", (-0.86, 0.11), 1.1, color.orange, False, ui_tienda)
-texto("HABILIDADES", (0.08, 0.38), 1.1, color.orange, False, ui_tienda)
-texto("SUMINISTROS", (0.08, 0.15), 1.1, color.orange, False, ui_tienda)
-txt_tienda_desc = texto("", (-0.86, -0.22), 1.1, color.white, False, ui_tienda)
-txt_tienda_msg = texto("", (0, -0.34), 1.4, color.yellow, True, ui_tienda)
-texto(
-    "W/S o flechas: elegir   ENTER/ESPACIO: comprar   A/D: cambiar de arma   B/ESC: cerrar",
-    (0, -0.44),
-    1.0,
-    color.light_gray,
-    True,
-    ui_tienda,
+# --- helpers de interfaz (coordenadas por bordes: valen para cualquier aspecto) ---
+def rgb255(r, g, b, a=255):
+    return Vec4(r / 255, g / 255, b / 255, a / 255)
+
+
+TK = 1.0                       # multiplicador global del tamano de texto (HUD y tienda)
+AR = window.aspect_ratio
+MG = 0.033
+L, R, T, B = -AR / 2 + MG, AR / 2 - MG, 0.5 - MG, -0.5 + MG
+PANEL = rgb255(14, 18, 26, 150)          # translucido: se ve la escena detras
+BORDE = rgb255(105, 120, 145, 210)       # borde claro de 2 px
+GRIS = rgb255(150, 160, 176)
+ORO = rgb255(255, 205, 100)
+ROJO_H = rgb255(255, 64, 80)
+VERDE = rgb255(60, 220, 130)
+CIAN = rgb255(70, 200, 240)
+NARANJA_H = rgb255(255, 165, 75)
+TEX_ANILLO = _textura_anillo(256, 14)
+TEX_ANILLO_FINO = _textura_anillo(256, 3)
+CORTO = ("Pistola", "Rifle", "Escopeta", "Sniper", "Granadas")
+
+
+def caja(padre, cx, cy, w, h, col, z=0.6):
+    return _entity_factory(
+        parent=padre, model="quad", position=(cx, cy, z), scale=(w, h), color=col
+    )
+
+
+class Borde:
+    """Borde de 4 tiras. .color lo recolorea; .collider/.on_click van al panel."""
+
+    def __init__(self, panel, tiras):
+        object.__setattr__(self, "panel", panel)
+        object.__setattr__(self, "tiras", tiras)
+        object.__setattr__(self, "_col", None)
+
+    @property
+    def color(self):
+        return self._col
+
+    @color.setter
+    def color(self, c):
+        object.__setattr__(self, "_col", c)
+        for t in self.tiras:
+            t.color = c
+
+    def __setattr__(self, k, v):
+        if k in ("collider", "on_click"):
+            setattr(self.panel, k, v)
+        else:
+            object.__setattr__(self, k, v)
+
+
+def tarjeta(padre, cx, cy, w, h, col=None, borde=None, z=0.65, e=0.0026):
+    """Panel (translucido por defecto) con borde real de grosor e."""
+    panel = caja(padre, cx, cy, w, h, col or PANEL, z)
+    c = borde or BORDE
+    zb = z - 0.01
+    tiras = [
+        caja(padre, cx, cy + h / 2 - e / 2, w, e, c, zb),
+        caja(padre, cx, cy - h / 2 + e / 2, w, e, c, zb),
+        caja(padre, cx - w / 2 + e / 2, cy, e, h - 2 * e, c, zb),
+        caja(padre, cx + w / 2 - e / 2, cy, e, h - 2 * e, c, zb),
+    ]
+    return Borde(panel, tiras)
+
+
+def th(txt, x, y, esc, col=color.white, alin="l", padre=None):
+    """Texto de interfaz. alin: l(izquierda) c(centro) r(derecha)."""
+    return texto(txt, (x, y), esc * TK, col, alin == "c", padre or hud_info, der=(alin == "r"))
+
+
+def ancho(s_, esc):
+    """Ancho aproximado de un texto en unidades de camera.ui."""
+    return len(s_) * 0.0135 * esc * TK
+
+
+def fmt(n):
+    return f"{int(n):,}".replace(",", " ")
+
+
+# --- menu ya creado arriba; --- TIENDA ---
+SL, SR = -AR / 2 + 0.05, AR / 2 - 0.05
+TABS = ("Armas", "Perks", "Habilidades", "Suministros")
+RANGOS = ((0, 5), (5, 10), (10, 14), (14, 16))   # indices de ITEMS por pestana
+COL_FILA = rgb255(26, 33, 44)
+COL_TAB = rgb255(32, 40, 54)
+
+fondo(ui_tienda, 1.0, (13 / 255, 17 / 255, 25 / 255))
+txt_tienda_sub = th("", SL, 0.446, 0.62, GRIS, padre=ui_tienda)
+th("TIENDA", SL, 0.385, 3.0, color.white, padre=ui_tienda)
+txt_tienda_cred = th("", SR - 0.29, 0.424, 1.7, ORO, "r", ui_tienda)
+btn_iniciar = caja(ui_tienda, SR - 0.13, 0.424, 0.26, 0.058, ROJO_H, 0.5)
+btn_iniciar.collider = "box"
+btn_iniciar.on_click = lambda: iniciar_desde_tienda()
+th("ENTER  Iniciar oleada", SR - 0.13, 0.424, 0.78, color.white, "c", ui_tienda)
+
+tab_ents = []
+_x = SL
+for _k, (_nom, _w) in enumerate(zip(TABS, (0.105, 0.098, 0.155, 0.155))):
+    _e = caja(ui_tienda, _x + _w / 2, 0.34, _w, 0.044, COL_TAB, 0.5)
+    _e.collider = "box"
+    _e.on_click = lambda k=_k: elegir_tab(k)
+    _t = th(_nom, _x + _w / 2, 0.34, 0.8, color.white, "c", ui_tienda)
+    tab_ents.append((_e, _t))
+    _x += _w + 0.011
+
+# fila de armas (solo pestana Armas)
+strip = _entity_factory(parent=ui_tienda)
+_N = len(ARMAS)
+_CW = (SR - SL - 0.012 * (_N - 1)) / _N
+cards = []
+for _i in range(_N):
+    _cx = SL + _CW / 2 + _i * (_CW + 0.012)
+    _brd = tarjeta(strip, _cx, 0.245, _CW, 0.105, COL_FILA, BORDE, 0.55)
+    _brd.collider = "box"
+    _brd.on_click = lambda i=_i: elegir_arma_tienda(i)
+    th(ARMAS[_i]["nombre"], _cx - _CW / 2 + 0.02, 0.267, 1.15, color.white, padre=strip)
+    _ts = th("", _cx - _CW / 2 + 0.02, 0.222, 0.7, GRIS, padre=strip)
+    cards.append((_brd, _ts))
+
+# filas de mejoras (pool de 5)
+filas = []
+for _k in range(5):
+    _f = _entity_factory(parent=ui_tienda)
+    _f.brd = tarjeta(_f, 0, 0, SR - SL, 0.085, COL_FILA, BORDE, 0.55)
+    _f.brd.collider = "box"
+    _f.brd.on_click = lambda k=_k: click_fila(k)
+    _f.t_nombre = th("", SL + 0.022, 0.02, 1.1, color.white, padre=_f)
+    _f.t_desc = th("", SL + 0.022, -0.016, 0.62, GRIS, padre=_f)
+    _f.t_prev = th("", SL + 0.62, 0.016, 0.7, color.white, padre=_f)
+    _f.pips = [caja(_f, SL + 0.62 + j * 0.032 + 0.013, -0.02, 0.026, 0.007, BORDE, 0.5) for j in range(5)]
+    _f.btn = caja(_f, SR - 0.14, 0, 0.26, 0.055, ORO, 0.5)
+    _f.btn.collider = "box"
+    _f.btn.on_click = lambda k=_k: comprar_fila(k)
+    _f.t_btn = th("", SR - 0.14, 0, 0.85, color.black, "c", _f)
+    filas.append(_f)
+
+txt_tienda_msg = th("", 0, -0.40, 1.1, ORO, "c", ui_tienda)
+th(
+    "A/D arma   W/S elegir   1-4 o TAB pestana   ESPACIO o clic: comprar   ENTER: iniciar oleada   B/ESC: cerrar",
+    0, -0.455, 0.62, GRIS, "c", ui_tienda,
 )
-POS_FILAS = (
-    [(-0.86, 0.33 - 0.04 * k) for k in range(5)]
-    + [(-0.86, 0.06 - 0.04 * k) for k in range(5)]
-    + [(0.08, 0.33 - 0.04 * k) for k in range(4)]
-    + [(0.08, 0.10), (0.08, 0.06)]
-)
-filas = [texto("", p, 0.95, color.white, False, ui_tienda) for p in POS_FILAS]
 
-# --- HUD GENERAL ---
-def panel_hud(pos, escala, alpha=.90):
-    return _entity_factory(parent=hud, model='quad',
-                           position=(pos[0], pos[1], .65), scale=escala,
-                           color=Vec4(.025, .035, .05, alpha))
+# --- HUD EN PARTIDA (segun la referencia HUD_en_partida.png) ---
+# 1. Tarjeta superior izquierda
+CW_TL, CH_TL, PAD = 0.463, 0.17, 0.024
+tarjeta(hud_info, L + CW_TL / 2, T - CH_TL / 2, CW_TL, CH_TL)
+txt_oleada = th("", L + PAD, T - 0.042, 1.45, color.white)
+txt_record = th("", L + CW_TL - PAD, T - 0.042, 0.6, GRIS, "r")
+txt_enemigos = th("ENEMIGOS", L + PAD, T - 0.083, 0.6, GRIS)
+txt_hint = th("", L + CW_TL - PAD, T - 0.083, 0.85, color.white, "r")
+barra_enemigos = barra((L + CW_TL / 2, T - 0.106), (CW_TL - 2 * PAD, 0.008), ROJO_H)
+txt_puntos = th("", L + PAD, T - 0.138, 0.95, color.white)
+txt_cred = th("", L + CW_TL - PAD, T - 0.138, 1.05, ORO, "r")
+txt_combo = th("", L + PAD, T - CH_TL - 0.025, 0.7, NARANJA_H)
+txt_buff = th("", L + PAD, T - CH_TL - 0.055, 0.65, color.magenta)
 
+# 2. Capsula de aviso / combo (arriba al centro)
+box_aviso = _entity_factory(parent=hud_info, enabled=False)
+tarjeta(box_aviso, 0, T - 0.05, 0.42, 0.056)
+caja(box_aviso, -0.21, T - 0.05, 0.006, 0.056, ORO, 0.6)
+txt_aviso = th("", 0, T - 0.05, 0.95, color.white, "c", box_aviso)
 
-def acento_hud(pos, escala, col=None):
-    return _entity_factory(parent=hud, model='quad',
-                           position=(pos[0], pos[1], .62), scale=escala,
-                           color=col or color.rgb(220, 45, 62))
-
-
-# Estadisticas: una tarjeta, tres filas y dos columnas bien separadas.
-panel_hud((-.69, .43), (.57, .19))
-acento_hud((-.69, .521), (.57, .004))
-txt_puntos = texto('', (-.94, .465), .92, color.white)
-txt_cred = texto('', (-.66, .465), .88, color.gold)
-txt_record = texto('', (-.94, .415), .78, color.light_gray)
-txt_combo = texto('', (-.66, .415), .78, color.orange)
-txt_buff = texto('', (-.94, .365), .68, color.magenta)
-txt_furia = texto('', (-.66, .365), .68, color.orange)
-
-# Oleada: jerarquia clara entre numero, situacion y ayuda.
-panel_hud((0, .435), (.40, .17))
-acento_hud((0, .518), (.40, .004))
-txt_oleada = texto('', (0, .47), 1.35, color.white, True)
-txt_enemigos = texto('', (0, .418), .78, color.light_gray, True)
-txt_hint = texto('', (0, .372), .68, color.yellow, True)
-txt_aviso = texto('', (0, .2), 2.4, color.white, True)
-hitmarker = texto('x', (0, 0), 2.5, color.white, True)
+hitmarker = texto("x", (0, 0), 2.2, color.white, True, hud)
 hitmarker.enabled = False
 
-# Estado del jugador: etiquetas separadas de sus barras.
-panel_hud((-.70, -.42), (.57, .18))
-acento_hud((-.70, -.333), (.57, .004))
-txt_vida = texto('', (-.94, -.365), .76, color.white)
-txt_stamina = texto('', (-.94, -.445), .70, color.azure)
+# 3. Radar circular con norte y anillo de alcance
+RAD = 0.105
+RCX, RCY = R - RAD, T - RAD
+_entity_factory(parent=hud_info, model="circle", scale=RAD * 2, position=(RCX, RCY, 0.60), color=PANEL)
+_entity_factory(parent=hud_info, model="quad", texture=TEX_ANILLO_FINO, scale=RAD * 2 + 0.004,
+                position=(RCX, RCY, 0.59), color=BORDE)
+radar = _entity_factory(parent=hud_info, model="circle", scale=RAD * 1.6,
+                        position=(RCX, RCY, 0.58), color=Vec4(0.02, 0.03, 0.045, 0.92))
+for _esc in (0.33, 0.66, 1.0):          # anillos de distancia
+    _entity_factory(parent=radar, model="quad", texture=TEX_ANILLO_FINO, scale=_esc,
+                    color=Vec4(0.4, 0.5, 0.62, 0.5 if _esc < 1 else 0.3), z=-0.015)
+for _w, _h in ((1.0, 0.006), (0.006, 1.0)):   # cruz de ejes
+    _entity_factory(parent=radar, model="quad", scale=(_w, _h),
+                    color=Vec4(0.4, 0.5, 0.62, 0.22), z=-0.012)
+_entity_factory(parent=radar, model=Mesh(vertices=[(0, 0.07, 0), (-0.045, -0.04, 0), (0.045, -0.04, 0)],
+                                         triangles=[(0, 1, 2)]),
+                color=color.white, z=-0.02, double_sided=True)
+
+# Brujula: 8 direcciones + marcas cada 15 grados, giran con el jugador (arriba = hacia donde miras)
+_GRIS_OSC = rgb255(105, 114, 130)
+radar_dirs = [
+    (th(n_, RCX, RCY, esc_, col_, "c"), b_)
+    for n_, b_, esc_, col_ in (
+        ("N", 0, 0.7, ROJO_H), ("NE", 45, 0.4, _GRIS_OSC), ("E", 90, 0.6, GRIS),
+        ("SE", 135, 0.4, _GRIS_OSC), ("S", 180, 0.6, GRIS), ("SO", 225, 0.4, _GRIS_OSC),
+        ("O", 270, 0.6, GRIS), ("NO", 315, 0.4, _GRIS_OSC),
+    )
+]
+radar_marcas = [
+    (_entity_factory(parent=hud_info, model="circle",
+                     scale=0.0042 if k_ % 3 == 0 else 0.0026,
+                     color=rgb255(150, 165, 190, 230) if k_ % 3 == 0 else rgb255(105, 120, 145, 170),
+                     position=(RCX, RCY, 0.57)), k_ * 15)
+    for k_ in range(24)
+]
+_heading_ult = [None]
 
 
-def barra(pos, tam, col):
-    bg = _entity_factory(parent=hud, model='quad',
-                         color=color.rgb(38, 48, 62), scale=tam,
-                         position=(pos[0], pos[1], .1))
-    return _entity_factory(parent=bg, model='quad', color=col,
-                           origin_x=-.5, x=-.5, z=-.01, scale=(1, 1))
+def actualizar_brujula(force=False):
+    h = jugador.rotation_y
+    if not force and _heading_ult[0] is not None and abs(h - _heading_ult[0]) < 0.15:
+        return
+    _heading_ult[0] = h
+    for t_, b_ in radar_dirs:
+        a_ = math.radians(b_ - h)
+        r_ = 0.088 if len(t_.text) == 1 else 0.086
+        t_.position = (RCX + math.sin(a_) * r_, RCY + math.cos(a_) * r_, 0)
+    for e_, b_ in radar_marcas:
+        a_ = math.radians(b_ - h)
+        e_.position = (RCX + math.sin(a_) * 0.1, RCY + math.cos(a_) * 0.1, 0.57)
 
-
-barra_vida = barra((-.70, -.405), (.45, .018), color.rgb(230, 65, 78))
-barra_stamina = barra((-.70, -.485), (.45, .014), color.rgb(55, 165, 225))
-
-# Habilidades: cuatro celdas iguales, alineadas en una sola fila.
-panel_hud((.17, -.43), (.75, .16))
-txt_hab = {}
-for xh, k in zip((-.10, .09, .28, .47), HABS):
-    panel_hud((xh, -.43), (.17, .125), alpha=.96)
-    acento_hud((xh, -.369), (.17, .003), color.rgb(70, 86, 105))
-    txt_hab[k] = texto('', (xh, -.43), .70, color.white, True)
-
-# Municion/estado actual en un espacio propio, sin invadir las habilidades.
-panel_hud((.80, -.43), (.34, .16))
-acento_hud((.80, -.353), (.34, .004), color.rgb(70, 86, 105))
-txt_arma = texto('', (.80, -.425), .78, color.white, True)
-
-# Reticula central minimalista.
-for dx, dy, sx, sy in ((-.010, 0, .007, .0015), (.010, 0, .007, .0015),
-                       (0, .010, .0015, .007), (0, -.010, .0015, .007)):
-    _entity_factory(parent=hud, model='quad', color=color.white,
-                    position=(dx, dy), scale=(sx, sy))
-
-# Radar compacto en la esquina superior derecha.
-_entity_factory(parent=hud, model='circle', scale=.245,
-                position=(.78, .285, .04), color=Vec4(.12, .17, .23, .95))
-radar = _entity_factory(parent=hud, model='circle', scale=.22,
-                        position=(.78, .285, .02), color=Vec4(.015, .03, .05, .94))
-_entity_factory(parent=radar, model='circle', scale=.035,
-                color=color.white, z=-.02)
-_entity_factory(parent=radar, model='circle', scale=.72,
-                color=Vec4(.2, .3, .4, .28), z=-.015)
 puntos_radar = []
+
+# 4. Tarjeta de vida (abajo izquierda)
+CW_BL, CH_BL = 0.472, 0.135
+tarjeta(hud_info, L + CW_BL / 2, B + CH_BL / 2, CW_BL, CH_BL)
+th("VIDA", L + PAD, B + 0.092, 0.6, GRIS)
+X_VIDA_R = L + CW_BL - PAD
+txt_vida_max = th("", X_VIDA_R, B + 0.097, 0.85, GRIS, "r")
+txt_vida_n = th("", X_VIDA_R - 0.09, B + 0.097, 1.7, color.white, "r")
+barra_vida = barra((L + CW_BL / 2, B + 0.063), (CW_BL - 2 * PAD, 0.017), VERDE)
+barra_stamina = barra((L + CW_BL / 2, B + 0.041), (CW_BL - 2 * PAD, 0.005), CIAN)
+th("RESISTENCIA", L + PAD, B + 0.022, 0.55, GRIS)
+
+# 5. Habilidades: anillo con progreso + tecla debajo
+def malla_arco(frac, seg=48, r_ext=0.5, r_int=0.44):
+    n = max(0, min(seg, int(round(frac * seg))))
+    if n == 0:
+        return None
+    verts, tris = [], []
+    for i in range(n + 1):
+        ang = math.pi / 2 - i * math.tau / seg      # arranca arriba, sentido horario
+        c, s_ = math.cos(ang), math.sin(ang)
+        verts += [(c * r_ext, s_ * r_ext, 0), (c * r_int, s_ * r_int, 0)]
+    for i in range(n):
+        a = 2 * i
+        tris += [(a, a + 2, a + 1), (a + 1, a + 2, a + 3)]
+    return Mesh(vertices=verts, triangles=tris, mode="triangle")
+
+
+HAB_COL = dict(dash=CIAN, onda=CIAN, torreta=ORO, furia=ROJO_H)
+HAB_NOM = dict(dash="DASH", onda="ONDA", torreta="TORR.", furia="FURIA")
+CD_TOT = {k: 0.0 for k in HABS}
+HR, HY = 0.045, -0.3875
+hab_ui = {}
+for _xh, _k in zip((-0.1667, -0.0556, 0.0556, 0.1667), HABS):
+    _entity_factory(parent=hud_info, model="circle", scale=HR * 2 - 0.012, position=(_xh, HY, 0.62), color=PANEL)
+    _entity_factory(parent=hud_info, model="quad", texture=TEX_ANILLO, scale=HR * 2,
+                    position=(_xh, HY, 0.61), color=BORDE)
+    _arco = _entity_factory(parent=hud_info, model=malla_arco(1.0), scale=HR * 2,
+                            position=(_xh, HY, 0.60), color=HAB_COL[_k], double_sided=True)
+    _txt = th("", _xh, HY, 0.62, color.white, "c")
+    caja(hud_info, _xh, -0.456, 0.026, 0.026, rgb255(226, 230, 238), 0.6)
+    th(HABS[_k][0].upper(), _xh, -0.456, 0.6, color.black, "c")
+    hab_ui[_k] = dict(arco=_arco, txt=_txt, n=48)
+
+# 6. Armas (slots) + panel de municion (abajo derecha)
+CW_BR, CH_BR = 0.471, 0.167
+X_R = R - 0.027
+tarjeta(hud_info, R - CW_BR / 2, B + CH_BR / 2, CW_BR, CH_BR)
+slots_arma = {}
+_NA = len(ARMAS)
+_SW = (CW_BR - 0.008 * (_NA - 1)) / _NA
+for _i in range(_NA):
+    _sx = R - CW_BR + _SW / 2 + _i * (_SW + 0.008)
+    _brd = tarjeta(hud_info, _sx, B + 0.21, _SW, 0.061, PANEL, BORDE, 0.65)
+    caja(hud_info, _sx - _SW / 2 + 0.02, B + 0.222, 0.026, 0.026, rgb255(60, 70, 86), 0.6)
+    _num = th(str(_i + 1), _sx - _SW / 2 + 0.02, B + 0.222, 0.6, color.white, "c")
+    _nom = th(CORTO[_i] if _i < len(CORTO) else ARMAS[_i]["nombre"], _sx - _SW / 2 + 0.012, B + 0.196, 0.55, GRIS)
+    slots_arma[_i] = dict(brd=_brd, nom=_nom, num=_num)
+
+txt_arma_tipo = th("", X_R, B + 0.134, 0.62, GRIS, "r")
+txt_mag = th("", X_R - 0.1, B + 0.082, 3.2, color.white, "r")
+txt_mag_max = th("", X_R, B + 0.07, 1.3, GRIS, "r")
+txt_reserva = th("", X_R - 0.2, B + 0.03, 0.8, GRIS, "r")
+txt_baja = th("", X_R - 0.2, B + 0.03, 0.8, ROJO_H, "r")
+X_BADGE = X_R - ancho("recargar", 0.8) - 0.018
+X_BAJA_R = X_BADGE - 0.024
+caja(hud_info, X_BADGE, B + 0.03, 0.024, 0.024, rgb255(226, 230, 238), 0.6)
+th("R", X_BADGE, B + 0.03, 0.6, color.black, "c")
+th("recargar", X_R, B + 0.03, 0.8, GRIS, "r")
+
+# 7. Reticula dinamica (se abre con el bloom) y miras tacticas por arma
+reticula = _entity_factory(parent=hud)
+ticks = []
+for _dx, _dy, _sx, _sy in ((-0.026, 0, 0.011, 0.003), (0.026, 0, 0.011, 0.003),
+                           (0, 0.026, 0.003, 0.011), (0, -0.026, 0.003, 0.011)):
+    _e = _entity_factory(parent=reticula, model="quad", color=color.white,
+                         position=(_dx, _dy, 0.52), scale=(_sx, _sy))
+    ticks.append((_e, _dx, _dy))
+_entity_factory(parent=reticula, model="quad", color=ROJO_H, position=(0, 0, 0.52), scale=0.0035)
+miras = crear_miras(hud)
+_mira_act = None
+_sens_base = Vec2(*jugador.mouse_sensitivity) if hasattr(jugador, "mouse_sensitivity") else None
+
+
+def ocultar_mira():
+    global _mira_act
+    if _mira_act in miras:
+        miras[_mira_act].enabled = False
+    _mira_act = None
+    reticula.enabled = True
+    arma_modelo.enabled = True
+    hud_info.enabled = True
+
+
+def actualizar_mira(ads, a):
+    """Muestra la mira tactica cuando el zoom ya esta al 60 %; si no, la reticula normal."""
+    global _mira_act
+    nombre = None
+    if ads and (90 - camera.fov) >= 0.6 * (90 - a["fov_ads"]):
+        nombre = a["mira"]
+    if nombre != _mira_act:
+        ocultar_mira()
+        if nombre:
+            miras[nombre].enabled = True
+            _mira_act = nombre
+            reticula.enabled = False
+            arma_modelo.enabled = False
+            hud_info.enabled = nombre != "mildot"
+    if reticula.enabled:
+        k = 1 + bloom.valor * 2.5
+        for e, dx, dy in ticks:
+            e.position = (dx * k, dy * k, 0.52)
+
 
 # =====================================================================
 #  UTILIDADES Y EFECTOS
@@ -489,6 +723,7 @@ def aviso(txt, dur=2.0, col=color.white):
     poner(txt_aviso, txt)
     txt_aviso.color = col
     S.aviso_t = dur
+    box_aviso.enabled = dur > 0
 
 
 def _crear_efecto(tipo, limite, entidad, duracion):
@@ -734,7 +969,7 @@ class Enemigo(Entity):
             parent=self.barra_bg,
             model="quad",
             color=color.lime,
-            origin_x=-0.5,
+            origin=(-0.5, 0),
             x=-0.5,
             z=-0.01,
             scale=(1, 0.7),
@@ -753,7 +988,7 @@ class Enemigo(Entity):
         if self.muerto:
             return
         self.hp -= d
-        ratio = max(self.hp / self.hp_max, 0.001)
+        ratio = clamp(self.hp / max(self.hp_max, 1), 0.0001, 1.0)
         self.barra.scale_x = ratio
         self.barra.color = color.red if ratio < 0.35 else color.lime
         if flash:
@@ -773,7 +1008,10 @@ class Enemigo(Entity):
         )
         S.combo += 1
         S.combo_t = 4
-        ganar(int(d["puntos"] * mult_combo()))
+        pts = int(d["puntos"] * mult_combo())
+        ganar(pts)
+        if S.combo >= 3:
+            aviso(f"¡Combo x{S.combo}! +{pts} puntos", 1.5, color.orange)
         S.muertes += 1
         if S.perks["robo"] > 0:
             S.salud = min(S.salud_max, S.salud + 2 * S.perks["robo"])
@@ -1005,7 +1243,7 @@ class Torreta(Entity):
             parent=bg,
             model="quad",
             color=color.orange,
-            origin_x=-0.5,
+            origin=(-0.5, 0),
             x=-0.5,
             z=-0.01,
             scale=(1, 0.7),
@@ -1024,7 +1262,7 @@ class Torreta(Entity):
             particulas(self.position + Vec3(0, 1, 0), color.orange, n=10)
             self.quitar()
             return
-        self.barra.scale_x = max(self.vida / self.vida_max, 0.001)
+        self.barra.scale_x = clamp(self.vida / max(self.vida_max, 1), 0.0001, 1.0)
         self.cd -= dt
         objetivo = mas_cercano(self.position, 30)
         if objetivo:
@@ -1083,6 +1321,25 @@ def recargar():
     reproducir_audio(SONIDO_RECARGA)
 
 
+def _v3(v):
+    return (v.x, v.y, v.z)
+
+
+def dispersion_actual(a, ads):
+    """Cono base (hip/ADS) x movimiento x bloom de la rafaga."""
+    base = a.get("dispersion_ads", a["dispersion"] * 0.4) if ads else a["dispersion"]
+    en_mov = _held_keys["w"] or _held_keys["a"] or _held_keys["s"] or _held_keys["d"]
+    if not getattr(jugador, "grounded", True):
+        mov = 2.0
+    elif en_mov and _held_keys["left shift"] and S.puede_correr:
+        mov = 1.6
+    elif en_mov:
+        mov = 1.25
+    else:
+        mov = 1.0
+    return base * mov * bloom.factor
+
+
 def disparar():
     a = ARMAS[S.arma]
     furia = S.furia_t > 0
@@ -1105,21 +1362,27 @@ def disparar():
     S.cd = stat(S.arma, "cadencia") * (0.5 if furia else 1)
     S.retroceso = 1
     S.fogonazo = 0.05
-    jugador.camera_pivot.rotation_x = max(
-        -85, jugador.camera_pivot.rotation_x - a["kick"]
-    )
 
+    # La punteria se fija ANTES de aplicar el retroceso de este disparo.
+    ads = bool(_held_keys["right mouse"])
+    fwd, right, up = _v3(camera.forward), _v3(camera.right), _v3(camera.up)
     origen = camera.world_position
-    muzzle = arma_modelo.world_position + camera.forward * 0.8
+    disp = dispersion_actual(a, ads)
+
+    # Retroceso vertical + horizontal acumulado (se recupera solo en update()).
+    sube, giro = retro.disparar(a["kick_v"], a["kick_h"], a.get("tope", 0.0), a["recup"])
+    piv = jugador.camera_pivot
+    antes = piv.rotation_x
+    piv.rotation_x = max(-85, antes - sube)
+    retro.corregir(sube, antes - piv.rotation_x)
+    jugador.rotation_y += giro
+    bloom.disparo()
+
+    muzzle = arma_modelo.world_position + Vec3(*fwd) * 0.8
     dano_base = stat(S.arma, "dano") * (2 if S.buff_t > 0 else 1)
-    disp = a["dispersion"] * (0.4 if _held_keys["right mouse"] else 1)
 
     for _ in range(a["perdigones"]):
-        v = (
-            camera.forward
-            + Vec3(random.uniform(-1, 1), random.uniform(-1, 1), random.uniform(-1, 1))
-            * disp
-        ).normalized()
+        v = Vec3(*direccion_en_cono(fwd, right, up, disp))
         ign = [jugador]
         fin = origen + v * 100
         impacto = False
@@ -1266,8 +1529,9 @@ def rellenar_municion():
         S.mag[i] = stat(i, "cargador")
 
 
-def item(nombre, nivel, maximo, coste, accion, desc, bloqueado=False):
+def item(nombre, nivel, maximo, coste, accion, desc, bloqueado=False, previa=""):
     return dict(
+        previa=previa,
         nombre=nombre,
         nivel=nivel,
         maximo=maximo,
@@ -1276,6 +1540,19 @@ def item(nombre, nivel, maximo, coste, accion, desc, bloqueado=False):
         desc=desc,
         bloqueado=bloqueado,
     )
+
+
+def previa_mejora(i, c):
+    """Texto 'actual -> siguiente nivel' para las mejoras de arma."""
+    a, n = ARMAS[i], S.niv[i][c]
+    if c == "dano":
+        return f"DAÑO {a['dano'] * (1 + .25 * n):.0f} -> +25% {a['dano'] * (1 + .25 * (n + 1)):.0f}"
+    if c == "carga":
+        sig = max(1, int(round(a["cargador"] * (1 + .25 * (n + 1)))))
+        return f"CARGADOR {stat(i, 'cargador')} -> +25% {sig}"
+    if c == "cad":
+        return f"CADENCIA {a['cadencia'] * .9 ** n:.2f} s -> {a['cadencia'] * .9 ** (n + 1):.2f} s"
+    return f"RECARGA {a['recarga'] * .85 ** n:.1f} s -> {a['recarga'] * .85 ** (n + 1):.1f} s"
 
 
 def construir_items():
@@ -1374,46 +1651,131 @@ def construir_items():
             "Rellena cargadores y reservas de todas las armas.",
         )
     )
+    items[0]["previa"] = f"DAÑO {stat(i, 'dano'):.0f} · CADENCIA {stat(i, 'cadencia'):.2f} s"
+    for it_, (clave, *_r) in zip(items[1:5], MEJORAS_ARMA):
+        it_["previa"] = previa_mejora(i, clave)
     return items
 
 
-def etiqueta(it):
-    n, m, c = it["nivel"], it["maximo"], it["coste"]
-    if n is None:
-        return it["nombre"] if c is None else f'{it["nombre"]}   ${c}'
-    if m and n >= m:
-        return f'{it["nombre"]}   Nv {n}/{m}  MAX'
-    return f'{it["nombre"]}   Nv {n}/{m}   ${c}'
+def estado_item(it):
+    if it["accion"] is None:
+        return "info"
+    if it["maximo"] and it["nivel"] is not None and it["nivel"] >= it["maximo"]:
+        return "max"
+    if it["bloqueado"]:
+        return "bloq"
+    if S.creditos < it["coste"]:
+        return "falta"
+    return "ok"
 
 
 def refrescar_tienda():
     ITEMS[:] = construir_items()
-    poner(txt_tienda_cred, f"TIENDA   -   Creditos: ${S.creditos}")
-    a = ARMAS[S.tienda_arma]
-    estado = "DISPONIBLE" if S.desbloqueadas[S.tienda_arma] else "BLOQUEADA"
-    poner(txt_hdr_arma, f'ARMA: {a["nombre"]} ({estado})   [A/D para cambiar]')
-    for idx, it in enumerate(ITEMS):
-        t = filas[idx]
-        sel = idx == S.tienda_sel
-        maxed = (
-            bool(it["maximo"])
-            and it["nivel"] is not None
-            and it["nivel"] >= it["maximo"]
-        )
-        poner(t, ("> " if sel else "   ") + etiqueta(it))
-        if sel:
-            t.color = color.yellow
-        elif maxed:
-            t.color = color.lime
-        elif (
-            it["coste"] is not None
-            and S.creditos >= it["coste"]
-            and not it["bloqueado"]
-        ):
-            t.color = color.white
+    poner(txt_tienda_cred, f"$ {fmt(S.creditos)}")
+    poner(txt_tienda_sub, f"ENTRE OLEADAS · SIGUIENTE EN {int(max(S.intermedio, 0)) + 1} s")
+    lo, hi = RANGOS[S.tienda_tab]
+    S.tienda_sel = max(lo, min(hi - 1, S.tienda_sel))
+
+    for k, (e, t) in enumerate(tab_ents):
+        activo = k == S.tienda_tab
+        e.color = ORO if activo else COL_TAB
+        t.color = color.black if activo else color.white
+
+    strip.enabled = S.tienda_tab == 0
+    if S.tienda_tab == 0:
+        for i, (brd, ts) in enumerate(cards):
+            brd.color = ORO if i == S.tienda_arma else BORDE
+            precio = ARMAS[i]["precio"]
+            if S.desbloqueadas[i]:
+                poner(ts, "EQUIPADA" if i == S.arma else "Disponible")
+                ts.color = VERDE if i == S.arma else GRIS
+            else:
+                poner(ts, f"Bloqueada · ${precio}")
+                ts.color = ORO if S.creditos >= precio else GRIS
+
+    y0 = 0.13 if S.tienda_tab == 0 else 0.235
+    for k, f in enumerate(filas):
+        idx = lo + k
+        if idx >= hi:
+            f.enabled = False
+            continue
+        f.enabled = True
+        f.y = y0 - k * 0.097
+        it = ITEMS[idx]
+        est = estado_item(it)
+        f.brd.color = ORO if idx == S.tienda_sel else BORDE
+        poner(f.t_nombre, it["nombre"])
+        poner(f.t_desc, it["desc"])
+        poner(f.t_prev, it["previa"])
+        f.t_prev.color = VERDE if it["previa"].startswith(("DAÑO", "CARG", "CADE", "RECA")) and "->" in it["previa"] else GRIS
+        # pips de nivel
+        compra = it["nombre"].startswith("Comprar")
+        mostrar = it["maximo"] and it["nivel"] is not None and not compra and est != "info"
+        for j, p in enumerate(f.pips):
+            p.enabled = bool(mostrar) and j < it["maximo"]
+            if p.enabled:
+                p.color = VERDE if j < it["nivel"] else BORDE
+        # boton de compra
+        f.btn.enabled = f.t_btn.enabled = est != "info"
+        if est == "ok":
+            c = it["coste"]
+            txt = f"Comprar · ${c}" if compra else (f"Mejorar · ${c}" if it["nivel"] is not None else f"${c}")
+            f.btn.color, f.t_btn.color = ORO, color.black
+        elif est == "falta":
+            txt = f"Faltan ${it['coste'] - S.creditos} · ${it['coste']}"
+            f.btn.color, f.t_btn.color = COL_TAB, GRIS
+        elif est == "max":
+            txt = "NIVEL MÁXIMO"
+            f.btn.color, f.t_btn.color = rgb255(30, 62, 46), VERDE
         else:
-            t.color = color.gray
-    poner(txt_tienda_desc, ITEMS[S.tienda_sel]["desc"])
+            txt = "Bloqueada"
+            f.btn.color, f.t_btn.color = COL_TAB, GRIS
+        poner(f.t_btn, txt)
+
+
+def elegir_tab(k):
+    S.tienda_tab = k % len(TABS)
+    S.tienda_sel = RANGOS[S.tienda_tab][0]
+    refrescar_tienda()
+
+
+def elegir_arma_tienda(i):
+    S.tienda_arma = i % len(ARMAS)
+    if S.tienda_tab == 0:
+        S.tienda_sel = 0
+    refrescar_tienda()
+
+
+def mover_sel(paso):
+    lo, hi = RANGOS[S.tienda_tab]
+    S.tienda_sel = lo + (S.tienda_sel - lo + paso) % (hi - lo)
+    refrescar_tienda()
+
+
+def click_fila(k):
+    S.tienda_sel = RANGOS[S.tienda_tab][0] + k
+    refrescar_tienda()
+
+
+def comprar_fila(k):
+    S.tienda_sel = RANGOS[S.tienda_tab][0] + k
+    comprar_seleccion()
+
+
+def iniciar_desde_tienda():
+    cerrar_tienda()
+    S.intermedio = 0.01
+
+
+def actualizar_tienda(dt):
+    """Cuenta atras viva dentro de la tienda (TIENDA_CONTADOR)."""
+    if not TIENDA_CONTADOR:
+        return
+    S.intermedio -= dt
+    if S.intermedio <= 0:
+        iniciar_desde_tienda()
+        return
+    poner(txt_tienda_sub, f"ENTRE OLEADAS · SIGUIENTE EN {int(S.intermedio) + 1} s")
 
 
 def msg_tienda(s):
@@ -1440,7 +1802,9 @@ def comprar_seleccion():
 def abrir_tienda():
     S.estado = "tienda"
     S.tienda_arma = S.arma
+    S.tienda_tab = 0
     S.tienda_sel = 0
+    ocultar_mira()
     jugador.enabled = False
     mouse.visible = True
     mouse.locked = False
@@ -1540,6 +1904,10 @@ def iniciar():
             destroy(e)
         lista.clear()
     vars(S).update(nuevo_estado(S.record))
+    retro.reiniciar()
+    bloom.reiniciar()
+    _heading_ult[0] = None
+    ocultar_mira()
     aplicar_arma()
     camera.fov = 90
     jugador.position = Vec3(0, 1, 0)
@@ -1552,6 +1920,7 @@ def iniciar():
     ui_pausa.enabled = False
     ui_tienda.enabled = False
     hud.enabled = True
+    box_aviso.enabled = False
     poner(txt_aviso, "")
     S.estado = "jugando"
     iniciar_oleada()
@@ -1559,6 +1928,7 @@ def iniciar():
 
 def pausar():
     detener_audio_torretas()
+    ocultar_mira()
     S.estado = "pausa"
     jugador.enabled = False
     mouse.visible = True
@@ -1576,6 +1946,7 @@ def reanudar():
 
 def terminar():
     detener_audio_torretas()
+    ocultar_mira()
     S.estado = "fin"
     nuevo = S.puntos > S.record
     if nuevo:
@@ -1636,46 +2007,99 @@ def actualizar_radar():
 
 def actualizar_hud(dt):
     a = ARMAS[S.arma]
-    poner(txt_puntos, f'PUNTOS  {S.puntos:,}'.replace(',', '.'))
-    poner(txt_record, f'RECORD  {max(S.record, S.puntos):,}'.replace(',', '.'))
-    poner(txt_cred, f'CREDITOS  ${S.creditos:,}'.replace(',', '.'))
-    poner(txt_oleada, f'OLEADA  {S.oleada:02d}')
-    if S.intermedio > 0:
-        poner(txt_enemigos, 'PREPARACION DE OLEADA')
-        poner(txt_hint, f'Comienza en {int(S.intermedio) + 1}s  ·  B: tienda')
-    else:
-        poner(txt_enemigos, f'EN CURSO  ·  {len(enemigos) + len(S.cola)} enemigos')
-        poner(txt_hint, '')
-    poner(txt_combo, f'COMBO  x{mult_combo():.1f}' if S.combo > 1 else '')
-    poner(txt_buff, f'DANO x2  {int(S.buff_t) + 1}s' if S.buff_t > 0 else '')
-    poner(txt_furia, f'FURIA  {int(S.furia_t) + 1}s' if S.furia_t > 0 else '')
-    poner(txt_vida, f'VIDA  {int(S.salud)}/{S.salud_max}')
-    poner(txt_stamina, f'RESISTENCIA  {int(S.stamina)}%')
-    if S.recarga > 0:
-        estado_arma = "RECARGANDO..."
-    elif S.furia_t > 0:
-        estado_arma = 'INFINITA'
-    else:
-        estado_arma = f'{S.mag[S.arma]} / {S.reserva[S.arma]}'
-    poner(txt_arma, f'{a["nombre"].upper()}\n{estado_arma}')
-    barra_vida.scale_x = max(S.salud / S.salud_max, .001)
-    barra_stamina.scale_x = max(S.stamina / 100, .001)
+    poner(txt_oleada, f"OLEADA {S.oleada}")
+    poner(txt_record, f"RÉCORD {fmt(max(S.record, S.puntos))}")
+    poner(txt_puntos, f"Puntos {fmt(S.puntos)}")
+    poner(txt_cred, f"$ {fmt(S.creditos)}")
 
+    total_en = len(enemigos) + len(S.cola)
+    if S.intermedio > 0:
+        poner(txt_enemigos, "PREPARACIÓN")
+        poner(txt_hint, f"{int(S.intermedio) + 1} s · B tienda")
+        barra_enemigos.scale_x = 0.0001
+    else:
+        max_en = max(getattr(S, "enemigos_oleada_total", total_en), total_en, 1)
+        poner(txt_enemigos, "ENEMIGOS")
+        poner(txt_hint, f"{total_en} / {max_en}")
+        barra_enemigos.scale_x = clamp(total_en / max_en, 0.0001, 1.0)
+
+    poner(txt_combo, f"COMBO  x{mult_combo():.1f}" if S.combo > 1 else "")
+    poner(txt_buff, f"DANO x2  {int(S.buff_t) + 1}s" if S.buff_t > 0 else "")
+
+    # --- vida ---
+    salud_max = max(S.salud_max, 1)
+    smax_txt = f"/ {S.salud_max}"
+    poner(txt_vida_max, smax_txt)
+    poner(txt_vida_n, f"{int(S.salud)}")
+    txt_vida_n.x = X_VIDA_R - ancho(smax_txt, 0.85) - 0.012
+    txt_vida_n.color = ROJO_H if S.salud < salud_max * 0.3 else color.white
+    barra_vida.scale_x = clamp(S.salud / salud_max, 0.0001, 1.0)
+    barra_stamina.scale_x = clamp(S.stamina / 100.0, 0.0001, 1.0)
+
+    # --- municion ---
+    cargador = stat(S.arma, "cargador")
+    mag = S.mag[S.arma]
+    furia = S.furia_t > 0
+    max_txt = f"/ {cargador}"
+    poner(txt_arma_tipo, f'{a["nombre"].upper()} · {"AUTO" if a["auto"] else "SEMI"}')
+    poner(txt_mag, "INF" if furia else str(mag))
+    poner(txt_mag_max, max_txt)
+    txt_mag.x = X_R - ancho(max_txt, 1.3) - 0.01
+    baja = (not furia) and mag <= max(1, cargador * 0.25)
+    txt_mag.color = ROJO_H if baja else color.white
+    if S.recarga > 0:
+        msg_baja, col_baja = "RECARGANDO", NARANJA_H
+    elif baja and S.reserva[S.arma] <= 0 and mag <= 0:
+        msg_baja, col_baja = "SIN MUNICIÓN", ROJO_H
+    elif baja:
+        msg_baja, col_baja = "MUNICIÓN BAJA", ROJO_H
+    else:
+        msg_baja, col_baja = "", ROJO_H
+    poner(txt_baja, (msg_baja + " ·") if msg_baja else "")
+    txt_baja.color = col_baja
+    txt_baja.x = X_BAJA_R
+    poner(txt_reserva, f"Reserva {S.reserva[S.arma]} ·")
+    txt_reserva.x = (X_BAJA_R - ancho(msg_baja + " ·", 0.8) - 0.012) if msg_baja else X_BAJA_R
+
+    for idx, ui in slots_arma.items():
+        activo = idx == S.arma
+        libre = S.desbloqueadas[idx]
+        ui["brd"].color = ORO if activo else BORDE
+        poner(ui["nom"], (CORTO[idx] if idx < len(CORTO) else ARMAS[idx]["nombre"]) if libre else f'${ARMAS[idx]["precio"]}')
+        ui["nom"].color = color.white if activo else (GRIS if libre else rgb255(90, 98, 112))
+
+    # --- habilidades: anillo de progreso ---
     for k, (tecla, nombre) in HABS.items():
+        ui = hab_ui[k]
         cd = S.cdh[k]
-        if k == 'furia' and S.furia_t > 0:
-            s, col = f'{tecla}  {nombre}\nACTIVA', color.rgb(245, 165, 75)
+        CD_TOT[k] = max(CD_TOT[k], cd)
+        if k == "furia" and S.furia_t > 0:
+            frac = S.furia_t / (8 + 2 * S.hab["furia"])
+            s_, tcol, col = f"{int(S.furia_t) + 1}", NARANJA_H, NARANJA_H
         elif cd > 0:
-            s, col = f'{tecla}  {nombre}\n{cd:.1f}s', color.rgb(155, 166, 180)
+            frac = 1 - cd / max(CD_TOT[k], 0.01)
+            s_, tcol, col = f"{int(cd) + 1}", GRIS, HAB_COL[k]
         else:
-            s, col = f'{tecla}  {nombre}\nLISTA', color.rgb(105, 215, 155)
-        poner(txt_hab[k], s)
-        txt_hab[k].color = col
+            frac, s_, tcol, col = 1.0, HAB_NOM[k], color.white, HAB_COL[k]
+            CD_TOT[k] = 0.0
+        n = int(round(frac * 48))
+        if n != ui["n"]:
+            m = malla_arco(frac)
+            ui["n"] = n
+            ui["arco"].enabled = m is not None
+            if m is not None:
+                ui["arco"].model = m
+        ui["arco"].color = col
+        poner(ui["txt"], s_)
+        ui["txt"].color = tcol
 
     if S.aviso_t > 0:
-        S.aviso_t -= dt
-        if S.aviso_t <= 0:
-            poner(txt_aviso, '')
+        S.aviso_t = max(0, S.aviso_t - dt)
+        box_aviso.enabled = S.aviso_t > 0
+        if S.aviso_t == 0:
+            poner(txt_aviso, "")
+    else:
+        box_aviso.enabled = False
 
     S.hit_t = max(0, S.hit_t - dt)
     visible = S.hit_t > 0
@@ -1685,8 +2109,8 @@ def actualizar_hud(dt):
         hitmarker.color = color.red if S.hit_cab else color.white
 
     S.dano_alpha = max(0, S.dano_alpha - dt * 1.5)
-    extra = .12 if S.salud < S.salud_max * .3 else 0
-    overlay_dano.color = Vec4(1, 0, 0, S.dano_alpha + extra)
+    extra = 0.12 if S.salud < salud_max * 0.3 else 0
+    overlay_dano.color = Vec4(1, 0, 0, clamp(S.dano_alpha + extra, 0, 1))
 
     S.fogonazo = max(0, S.fogonazo - dt)
     f = S.fogonazo > 0
@@ -1695,9 +2119,12 @@ def actualizar_hud(dt):
 
 
 def update():
+    dt = min(float(getattr(_ursina_time, "dt", 0.0)), 0.05)
+    if S.estado == "tienda":
+        actualizar_tienda(dt)
+        return
     if S.estado != "jugando":
         return
-    dt = min(float(getattr(_ursina_time, "dt", 0.0)), 0.05)
     S.t += dt
 
     global _obstaculos_timer
@@ -1753,10 +2180,11 @@ def update():
             S.dash_fx_t = 0.08
 
     # --- zoom al apuntar ---
-    objetivo_fov = 90
-    if _held_keys["right mouse"]:
-        objetivo_fov = 30 if ARMAS[S.arma]["penetra"] > 1 else 70
+    ads = bool(_held_keys["right mouse"])
+    objetivo_fov = ARMAS[S.arma]["fov_ads"] if ads else 90
     camera.fov = lerp(camera.fov, objetivo_fov, min(1, 12 * dt))
+    if _sens_base is not None:      # sensibilidad proporcional al zoom
+        jugador.mouse_sensitivity = _sens_base * (camera.fov / 90) ** 0.9
 
     # --- arma ---
     S.cd = max(0, S.cd - dt)
@@ -1769,6 +2197,16 @@ def update():
     if _held_keys["left mouse"] and ARMAS[S.arma]["auto"]:
         disparar()
     S.retroceso = max(0, S.retroceso - dt * 9)
+
+    # --- recuperacion del retroceso y bloom: solo se devuelve lo acumulado ---
+    rdx, rdy = retro.recuperar(dt)
+    if rdx or rdy:
+        piv = jugador.camera_pivot
+        piv.rotation_x = max(-85, min(85, piv.rotation_x + rdx))
+        jugador.rotation_y -= rdy
+    bloom.actualizar(dt)
+    actualizar_mira(ads, ARMAS[S.arma])
+    actualizar_brujula()
     arma_modelo.z = 0.9 - 0.12 * S.retroceso
     objetivo_rot = 50 if S.recarga > 0 else 0
     arma_modelo.rotation_x = lerp(arma_modelo.rotation_x, objetivo_rot, min(1, 12 * dt))
@@ -1870,19 +2308,21 @@ def input(key):
 
     elif S.estado == "tienda":
         if key in ("w", "up arrow"):
-            S.tienda_sel = (S.tienda_sel - 1) % len(ITEMS)
-            refrescar_tienda()
+            mover_sel(-1)
         elif key in ("s", "down arrow"):
-            S.tienda_sel = (S.tienda_sel + 1) % len(ITEMS)
-            refrescar_tienda()
+            mover_sel(1)
         elif key in ("a", "left arrow"):
-            S.tienda_arma = (S.tienda_arma - 1) % len(ARMAS)
-            refrescar_tienda()
+            elegir_arma_tienda(S.tienda_arma - 1)
         elif key in ("d", "right arrow"):
-            S.tienda_arma = (S.tienda_arma + 1) % len(ARMAS)
-            refrescar_tienda()
-        elif key in ("enter", "space"):
+            elegir_arma_tienda(S.tienda_arma + 1)
+        elif key in ("1", "2", "3", "4"):
+            elegir_tab(int(key) - 1)
+        elif key == "tab":
+            elegir_tab(S.tienda_tab + 1)
+        elif key == "space":
             comprar_seleccion()
+        elif key == "enter":
+            iniciar_desde_tienda()
         elif key in ("b", "escape"):
             cerrar_tienda()
 
