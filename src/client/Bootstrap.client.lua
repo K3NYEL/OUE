@@ -30,6 +30,29 @@ local wave=makeLabel(hud,"Wave","OLEADA 0",18,UDim2.fromOffset(12,36))
 local health=makeLabel(hud,"Health","Vida: 100 / 100",14,UDim2.fromOffset(12,66))
 local healthBack=Instance.new("Frame"); healthBack.Position=UDim2.fromOffset(12,100); healthBack.Size=UDim2.fromOffset(300,12); healthBack.BackgroundColor3=Color3.fromRGB(55,55,60); healthBack.BorderSizePixel=0; healthBack.Parent=hud
 local healthFill=Instance.new("Frame"); healthFill.Size=UDim2.fromScale(1,1); healthFill.BackgroundColor3=Color3.fromRGB(215,38,61); healthFill.BorderSizePixel=0; healthFill.Parent=healthBack
+local radar=Instance.new("Frame"); radar.Name="Radar"; radar.Size=UDim2.fromOffset(124,124); radar.Position=UDim2.new(1,-18,0,18); radar.AnchorPoint=Vector2.new(1,0); radar.BackgroundColor3=Color3.fromRGB(10,15,20); radar.BackgroundTransparency=.18; radar.Parent=gui
+local radarCorner=Instance.new("UICorner"); radarCorner.CornerRadius=UDim.new(1,0); radarCorner.Parent=radar
+local radarStroke=Instance.new("UIStroke"); radarStroke.Color=Color3.fromRGB(215,38,61); radarStroke.Transparency=.2; radarStroke.Parent=radar
+local radarCenter=Instance.new("Frame"); radarCenter.Size=UDim2.fromOffset(6,6); radarCenter.Position=UDim2.fromScale(.5,.5); radarCenter.AnchorPoint=Vector2.new(.5,.5); radarCenter.BackgroundColor3=Color3.new(1,1,1); radarCenter.BorderSizePixel=0; radarCenter.Parent=radar
+local radarDots:{Frame}={}
+local function updateRadar(positions:{Vector3})
+ local root=player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+ local cam=workspace.CurrentCamera
+ if not root or not cam then return end
+ for i,pos in ipairs(positions) do
+  local dot=radarDots[i]
+  if not dot then dot=Instance.new("Frame"); dot.Name="EnemyDot"; dot.Size=UDim2.fromOffset(5,5); dot.BackgroundColor3=Color3.fromRGB(255,65,75); dot.BorderSizePixel=0; dot.Parent=radar; local corner=Instance.new("UICorner"); corner.CornerRadius=UDim.new(1,0); corner.Parent=dot; radarDots[i]=dot end
+  local delta=pos-root.Position
+  local forward=cam.CFrame.LookVector
+  local right=cam.CFrame.RightVector
+  local rx=delta:Dot(right); local rz=delta:Dot(forward)
+  local scale=math.min(1,math.sqrt(rx*rx+rz*rz)/30)
+  local angle=math.atan2(rx,-rz)
+  local x=math.sin(angle)*scale*.43; local y=-math.cos(angle)*scale*.43
+  dot.Position=UDim2.fromScale(.5+x,.5+y); dot.Visible=true
+ end
+ for i=#positions+1,#radarDots do radarDots[i].Visible=false end
+end
 local ammo=makeLabel(gui,"Ammo","Pistola 12 / 48",18,UDim2.new(1,-18,1,-42),Vector2.new(1,1)); ammo.TextXAlignment=Enum.TextXAlignment.Right
 local abilities=makeLabel(gui,"Abilities","Q Dash | E Onda | F Torreta | C Furia",13,UDim2.new(.5,0,1,-12),Vector2.new(.5,1)); abilities.TextXAlignment=Enum.TextXAlignment.Center; abilities.Size=UDim2.fromOffset(500,24)
 local cross=makeLabel(gui,"Crosshair","+ ",26,UDim2.fromScale(.5,.5),Vector2.new(.5,.5)); cross.Size=UDim2.fromOffset(30,30); cross.TextXAlignment=Enum.TextXAlignment.Center
