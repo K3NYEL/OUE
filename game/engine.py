@@ -738,7 +738,7 @@ class Torreta(Entity):
                 centro = objetivo.world_position + Vec3(0, objetivo.alto * .6, 0)
                 rayo(origen, centro, color.orange, .05)
                 danar_auto(objetivo, self.dano)
-
+                reproducir_audio(SONIDO_TORRET)
 
 # =====================================================================
 #  ARMAS
