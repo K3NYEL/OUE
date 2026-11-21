@@ -58,6 +58,10 @@ local abilities=makeLabel(gui,"Abilities","Q Dash | E Onda | F Torreta | C Furia
 local cross=makeLabel(gui,"Crosshair","+ ",26,UDim2.fromScale(.5,.5),Vector2.new(.5,.5)); cross.Size=UDim2.fromOffset(30,30); cross.TextXAlignment=Enum.TextXAlignment.Center
 local notice=makeLabel(gui,"Notice","",22,UDim2.new(.5,0,.23,0),Vector2.new(.5,.5)); notice.TextXAlignment=Enum.TextXAlignment.Center; notice.Size=UDim2.fromOffset(600,40)
 local shop=makePanel("Shop",UDim2.fromScale(.5,.5),UDim2.fromOffset(500,500)); shop.AnchorPoint=Vector2.new(.5,.5); shop.Visible=false
+local pausePanel=makePanel("Pause",UDim2.fromScale(.5,.5),UDim2.fromOffset(340,180)); pausePanel.AnchorPoint=Vector2.new(.5,.5); pausePanel.Visible=false
+local pauseTitle=makeLabel(pausePanel,"Title","PAUSA",26,UDim2.fromOffset(20,24)); pauseTitle.TextXAlignment=Enum.TextXAlignment.Center; pauseTitle.Size=UDim2.new(1,-40,0,40)
+local resume=Instance.new("TextButton"); resume.Size=UDim2.fromOffset(180,42); resume.Position=UDim2.new(.5,0,1,-28); resume.AnchorPoint=Vector2.new(.5,1); resume.Text="CONTINUAR"; resume.Font=Enum.Font.GothamBold; resume.TextSize=15; resume.TextColor3=Color3.new(1,1,1); resume.BackgroundColor3=Color3.fromRGB(190,35,55); resume.Parent=pausePanel
+local resumeCorner=Instance.new("UICorner"); resumeCorner.CornerRadius=UDim.new(0,6); resumeCorner.Parent=resume
 local shopTitle=makeLabel(shop,"Title","TIENDA",20,UDim2.fromOffset(14,8)); shopTitle.Size=UDim2.new(1,-28,0,30)
 local shopList=Instance.new("ScrollingFrame"); shopList.Position=UDim2.fromOffset(12,48); shopList.Size=UDim2.new(1,-24,1,-60); shopList.BackgroundTransparency=1; shopList.BorderSizePixel=0; shopList.ScrollBarThickness=5; shopList.Parent=shop
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,5); layout.Parent=shopList
@@ -77,6 +81,13 @@ local function populateShop()
  for key,a in pairs(Config.Abilities) do local cost=({dash=200,onda=250,torreta=300,furia=300})[key]; addButton("Mejorar "..key.."  |  $"..cost,function() Action:FireServer("Shop",{Category="ability",Key=key}) end) end
  for _,s in ipairs(Config.Supplies) do addButton(s.Name.."  |  $"..s.Cost,function() Action:FireServer("Shop",{Category="supply",Key=s.Key}) end) end
 end
+local function togglePause(value:boolean)
+ paused=value; pausePanel.Visible=value
+ Action:FireServer("Pause",value)
+ if value then UserInputService.MouseBehavior=Enum.MouseBehavior.Default; UserInputService.MouseIconEnabled=true
+ else UserInputService.MouseBehavior=Enum.MouseBehavior.LockCenter; UserInputService.MouseIconEnabled=false end
+end
+resume.Activated:Connect(function() togglePause(false) end)
 local function toggleShop(value:boolean)
  shopOpen=value; shop.Visible=value
  if value then populateShop(); UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true
@@ -100,12 +111,12 @@ Notice.OnClientEvent:Connect(function(message:string,color:Color3?)
  task.delay(2.5,function() if notice.Text==message then notice.Text="" end end)
 end)
 local function fire()
- if not shopOpen and workspace.CurrentCamera then Action:FireServer("Fire",workspace.CurrentCamera.CFrame.LookVector) end
+ if not shopOpen and not paused and workspace.CurrentCamera then Action:FireServer("Fire",workspace.CurrentCamera.CFrame.LookVector) end
 end
 local function sprint(value:boolean) if sprinting~=value then sprinting=value; Action:FireServer("Sprint",value) end end
 UIS.InputBegan:Connect(function(input,processed)
  if processed then return end
- if input.UserInputType==Enum.UserInputType.MouseButton1 then firing=true; fire()
+ if input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.P then if shopOpen then toggleShop(false) else togglePause(not paused) end\n elseif paused then return\n elseif input.UserInputType==Enum.UserInputType.MouseButton1 then firing=true; fire()
  elseif input.KeyCode==Enum.KeyCode.R then Action:FireServer("Reload")
  elseif input.KeyCode==Enum.KeyCode.LeftShift then sprint(true)
  elseif input.KeyCode==Enum.KeyCode.Q then Action:FireServer("Ability","dash")
@@ -156,4 +167,4 @@ local function updateViewmodel()
  vmFlash.CFrame=cam.CFrame*CFrame.new(.48,-.34,-1.7)
 end
 
-RunService.RenderStepped:Connect(function() updateViewmodel(); if firing and not shopOpen then local w=Config.Weapons[current.Weapon or 1]; if w and w.Automatic then fire() end end end)
+RunService.RenderStepped:Connect(function() updateViewmodel(); if firing and not shopOpen and not paused then local w=Config.Weapons[current.Weapon or 1]; if w and w.Automatic then fire() end end end)
