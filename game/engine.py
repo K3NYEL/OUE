@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from typing import Any
 import random
 import math
+from time import perf_counter as _perf_counter
 
 from .config import *
 from .audio import *
@@ -2137,6 +2138,26 @@ def actualizar_hud(dt):
         fogonazo.enabled = f
 
 
+# Perfilador por bloques: tiempos medios de CPU por frame.
+_PERFIL_INTERVALO = 5.0
+_perfil_tiempo = 0.0
+_perfil_frames = 0
+_perfil_acum = {"obstaculos": 0.0, "oleadas_ia_colisiones": 0.0, "drones_torretas": 0.0, "proyectiles_recogibles": 0.0, "efectos": 0.0, "hud_radar": 0.0}
+
+def registrar_perfil(dt_real):
+    global _perfil_tiempo, _perfil_frames
+    _perfil_tiempo += dt_real
+    _perfil_frames += 1
+    if _perfil_tiempo < _PERFIL_INTERVALO:
+        return
+    divisor = max(1, _perfil_frames)
+    partes = " | ".join(f"{nombre}={total * 1000 / divisor:.2f}ms" for nombre, total in _perfil_acum.items())
+    print(f"[PERFIL] oleada={S.oleada} | estado={S.estado} | promedio por frame ({divisor} frames): {partes} | particulas={len(EFECTOS_ACTIVOS['particula'])} | rayos={len(EFECTOS_ACTIVOS['rayo'])} | anillos={len(EFECTOS_ACTIVOS['anillo'])} | recogibles={len(recogibles)} | torretas={len(torretas)} | drones={len(drones)}")
+    _perfil_tiempo = 0.0
+    _perfil_frames = 0
+    for nombre in _perfil_acum:
+        _perfil_acum[nombre] = 0.0
+
 # Captura de rendimiento: una muestra agregada cada 5 segundos.
 _fps_tiempo = 0.0
 _fps_frames = 0
@@ -2184,7 +2205,9 @@ def update():
     global _obstaculos_timer
     _obstaculos_timer -= dt
     if _obstaculos_timer <= 0:
+        _t_perfil = _perf_counter()
         actualizar_obstaculos_visibles()
+        _perfil_acum["obstaculos"] += _perf_counter() - _t_perfil
         _obstaculos_timer = 0.20
 
     # --- correr / energia ---
@@ -2266,6 +2289,7 @@ def update():
     arma_modelo.rotation_x = lerp(arma_modelo.rotation_x, objetivo_rot, min(1, 12 * dt))
 
     # --- oleadas y enemigos ---
+    _t_perfil = _perf_counter()
     actualizar_oleadas(dt)
     construir_grid_enemigos()
     for e in enemigos[:]:
@@ -2273,14 +2297,18 @@ def update():
             e.actualizar(dt)
         if S.estado != "jugando":
             return
+    _perfil_acum["oleadas_ia_colisiones"] += _perf_counter() - _t_perfil
 
     # --- armas automaticas ---
+    _t_perfil = _perf_counter()
     for d in drones:
         d.actualizar(dt)
     for t in torretas[:]:
         t.actualizar(dt)
+    _perfil_acum["drones_torretas"] += _perf_counter() - _t_perfil
 
     # --- proyectiles enemigos ---
+    _t_perfil = _perf_counter()
     centro = jugador.world_position + Vec3(0, 1, 0)
     for p in proyectiles[:]:
         p.position += p.direccion * 14 * dt
@@ -2314,7 +2342,11 @@ def update():
         elif math.hypot(r.x - jugador.x, r.z - jugador.z) < 1.6 and jugador.y < 2.5:
             recoger(r)
 
+    _perfil_acum["proyectiles_recogibles"] += _perf_counter() - _t_perfil
+    _t_perfil = _perf_counter()
     limpiar_efectos()
+    _perfil_acum["efectos"] += _perf_counter() - _t_perfil
+    _t_perfil = _perf_counter()
 
     global _radar_timer, _hud_timer
     _radar_timer -= dt
@@ -2325,6 +2357,8 @@ def update():
     if _radar_timer <= 0:
         actualizar_radar()
         _radar_timer = RADAR_INTERVALO
+    _perfil_acum["hud_radar"] += _perf_counter() - _t_perfil
+    registrar_perfil(dt_real)
 
 
 def input(key):
