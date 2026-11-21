@@ -52,7 +52,6 @@ SONIDOS_ARMAS = [
     cargar_audio(('sniper_shot.wav', 'sniper.wav'), .90),
     cargar_audio(('grenade_shot.wav', 'grenade_launcher.wav', 'grenade.wav'), .80),
 ]
-SONIDO_TORRETA_LOOP = cargar_audio(('torreta.wav', 'turret.wav'), .30, loop=True)
 SONIDO_RECARGA = cargar_audio('reload.wav', .65)
 SONIDO_CAMBIO = cargar_audio(('weapons_switch.wav', 'weapon_switch.wav'), .50)
 SONIDO_SIN_MUNICION = cargar_audio('empty.wav', .60)
