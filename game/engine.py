@@ -712,11 +712,15 @@ class Torreta(Entity):
         self.cadencia = .5 * (.88 ** niv)
         self.vida = self.vida_max = 25 + 5 * niv
         self.cd = .3
+        self.sonido_activo = False
+        self.sonido = SONIDO_TORRETA_LOOP
         bg = _entity_factory(parent=self, model='quad', color=color.black, scale=(1.2, .12), y=2, billboard=True)
         self.barra = _entity_factory(parent=bg, model='quad', color=color.orange, origin_x=-.5, x=-.5,
                             z=-.01, scale=(1, .7))
 
     def quitar(self):
+        detener_audio(self.sonido)
+        self.sonido_activo = False
         if self in torretas:
             torretas.remove(self)
         destroy(self)
@@ -731,6 +735,9 @@ class Torreta(Entity):
         self.cd -= dt
         objetivo = mas_cercano(self.position, 30)
         if objetivo:
+            if not self.sonido_activo:
+                reproducir_audio(self.sonido)
+                self.sonido_activo = True
             self.cabeza.rotation_y = math.degrees(math.atan2(objetivo.x - self.x, objetivo.z - self.z))
             if self.cd <= 0:
                 self.cd = self.cadencia
@@ -738,7 +745,9 @@ class Torreta(Entity):
                 centro = objetivo.world_position + Vec3(0, objetivo.alto * .6, 0)
                 rayo(origen, centro, color.orange, .05)
                 danar_auto(objetivo, self.dano)
-                reproducir_audio(SONIDO_TORRET)
+        elif self.sonido_activo:
+            detener_audio(self.sonido)
+            self.sonido_activo = False
 
 # =====================================================================
 #  ARMAS
