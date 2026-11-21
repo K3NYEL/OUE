@@ -1,41 +1,77 @@
-# OUE — migración a Roblox / Luau
+# OUE — port a Roblox / Luau
 
-La versión Python + Ursina se conserva intacta en `main`. Esta rama contiene el port para Roblox Studio.
+La rama `main` conserva el juego original Python + Ursina. Esta rama contiene la migracion a Roblox; no se reemplazo el original.
 
-## Herramientas
+## Estructura
 
-- Roblox Studio
-- Luau
-- Rojo para sincronizar los archivos del repositorio con Studio
-- Git
+- `default.project.json`: proyecto Rojo en la raiz.
+- `src/shared/GameConfig.lua`: arena, enemigos, cinco armas, mejoras, perks, suministros y habilidades.
+- `src/shared/WeaponConfig.lua`: alias de la configuracion canonica de armas.
+- `src/server/Bootstrap.server.lua`: arranque del servidor.
+- `src/server/Services/GameService.lua`: oleadas, enemigos, jefe, disparos, recarga, municion, dano, quemadura, pickups, torretas, drones, habilidades, tienda, creditos y record persistente.
+- `src/client/Bootstrap.client.lua`: controles FPS, viewmodel local, HUD, radar, tienda y notificaciones.
 
-## Estructura prevista
+## Requisitos y ejecucion
 
-- `src/shared`: configuración compartida y contratos.
-- `src/server`: lógica autoritativa, oleadas, enemigos, daño, tienda y progreso.
-- `src/client`: controles, cámara, HUD, efectos y presentación.
-- `roblox/default.project.json`: configuración inicial de Rojo.
+1. Instala Roblox Studio.
+2. Instala Rojo CLI y la extension Rojo para Roblox Studio.
+3. Clona esta rama:
+   ```bash
+   git clone -b luau-migration https://github.com/K3NYEL/OUE.git
+   cd OUE
+   ```
+4. Inicia el servidor de sincronizacion:
+   ```bash
+   rojo serve default.project.json
+   ```
+5. En Roblox Studio abre un lugar nuevo, conecta el plugin Rojo al servidor y sincroniza el proyecto.
+6. Prueba con **Test > Start** usando al menos un servidor y un cliente.
 
-## Estado
+El mapa base se genera en el servidor al iniciar. No necesitas copiar manualmente scripts a servicios.
 
-- [x] Configuración inicial del proyecto Rojo.
-- [x] Datos de balance de enemigos y habilidades trasladados a Luau.
-- [x] Datos de balance de las cinco armas trasladados a Luau.
-- [x] Primer servicio de oleadas del servidor.
-- [ ] Plantillas de enemigos y su IA.
-- [ ] Movimiento, cámara y controles FPS.
-- [ ] Disparo, recarga, munición, daño, penetración y explosiones.
-- [ ] Habilidades: dash, onda, torreta y furia.
-- [ ] Drones, proyectiles y recogibles.
-- [ ] Tienda, mejoras, créditos y récord persistente.
-- [ ] HUD, menú, pausa y pantalla de fin.
-- [ ] Escenario, obstáculos, radar, efectos y audio.
-- [ ] Pruebas multijugador y validación de seguridad del servidor.
+## Controles
 
-## Recursos
+- WASD: movimiento (controles nativos de Roblox).
+- Mouse: mirar y disparar.
+- Shift: correr con energia.
+- R: recargar.
+- 1–5 / rueda: cambiar de arma desbloqueada.
+- Q: dash.
+- E: onda de choque.
+- F: desplegar torreta.
+- C: modo furia.
+- B: tienda durante el intermedio.
+- Enter: iniciar la siguiente oleada antes de tiempo.
+- Click en la tienda: comprar armas, mejoras, perks, habilidades y suministros.
 
-Los WAV de Ursina no se pueden reproducir directamente desde Roblox por ruta local. Los sonidos deberán publicarse como recursos de audio de Roblox y configurarse mediante sus IDs. Los modelos y geometría del escenario también deben convertirse a instancias/modelos de Roblox.
+## Seguridad y datos
 
-## Nota de arquitectura
+La autoridad de salud, daño, municion, oleadas, creditos y compras esta en el servidor. El cliente envia solicitudes, nunca el valor final del dano o de las recompensas. El record usa DataStore; para probar guardado en Studio hay que publicar el lugar y habilitar **Game Settings > Security > Enable Studio Access to API Services**. No uses datos de produccion para pruebas.
 
-El servidor será la autoridad para salud, daño, munición, compras, oleadas y recompensas. El cliente solo enviará solicitudes de entrada y mostrará cámara, HUD y efectos. No se confiará en valores de daño o dinero enviados por el cliente.
+## Diferencias y trabajo pendiente
+
+El port ya contiene una implementacion jugable inicial de los sistemas principales, pero aun no es una equivalencia visual/funcional exacta de Ursina.
+
+- Los archivos WAV locales no son reproducibles por Roblox. Hay que subir cada audio como recurso de Roblox, obtener sus IDs y configurarlos; no se inventan IDs.
+- Los modelos originales de Ursina se reemplazaron por geometria Roblox generada por script. Se pueden importar modelos propios despues.
+- Faltan animaciones pulidas de armas/recarga, efectos de impacto completos, audio espacial, menu de inicio/pausa y pantalla final dedicada.
+- La IA usa movimiento Humanoid directo y necesita pruebas/ajustes de navegacion en el mapa con obstaculos.
+- Hay que probar el juego en Roblox Studio con varios clientes y corregir cualquier diagnostico de Luau/runtime antes de publicar.
+
+## Estado de migracion
+
+- [x] Configuracion de balance de cinco armas y cinco clases de enemigo.
+- [x] Arena y obstaculos generados en Roblox.
+- [x] Oleadas progresivas y jefe cada cinco oleadas.
+- [x] Enemigos melee y ranged, barras de vida y drops.
+- [x] Disparo por raycast, headshots, penetracion y explosiones.
+- [x] Municion, cargadores, recarga y cambio de arma.
+- [x] Sprint y stamina.
+- [x] Dash, onda, torreta, furia y drones.
+- [x] Tienda, creditos, mejoras, perks y suministros.
+- [x] HUD, radar, viewmodel FPS y controles.
+- [x] Guardado del record por usuario.
+- [ ] Audio publicado y vinculado por asset IDs.
+- [ ] Animaciones/efectos finales y pantallas de menu, pausa y derrota.
+- [ ] Navegacion avanzada, balance y pruebas multijugador completas.
+- [ ] Validacion en Roblox Studio y correccion de errores de ejecucion.
