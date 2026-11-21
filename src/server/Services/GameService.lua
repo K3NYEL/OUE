@@ -456,9 +456,11 @@ local function useAbility(player: Player, key: string)
 	local level=d.Abilities[key] or 0; local now=os.clock()
 	if key=="dash" then
 		if now-d.LastDash<5*(.85^level) then return end
-		d.LastDash=now; d.InvulnerableUntil=now+.2+.02*level; local direction=hum.MoveDirection; if direction.Magnitude<.1 then direction=root.CFrame.LookVector end
-		root.AssemblyLinearVelocity=Vector3.new(direction.Unit.X*70,root.AssemblyLinearVelocity.Y,direction.Unit.Z*70)
-		task.delay(.22,function() if root.Parent then root.AssemblyLinearVelocity=Vector3.new(0,root.AssemblyLinearVelocity.Y,0) end end)
+		local dashDuration=.2+.02*level
+		d.LastDash=now; d.InvulnerableUntil=now+dashDuration; local direction=hum.MoveDirection; if direction.Magnitude<.1 then direction=root.CFrame.LookVector end
+		local dashSpeed=30*(1+.15*level)
+		root.AssemblyLinearVelocity=Vector3.new(direction.Unit.X*dashSpeed,root.AssemblyLinearVelocity.Y,direction.Unit.Z*dashSpeed)
+		task.delay(dashDuration,function() if root.Parent then root.AssemblyLinearVelocity=Vector3.new(0,root.AssemblyLinearVelocity.Y,0) end end)
 	elseif key=="onda" then
 		if now-d.LastShock<14*(.85^level) then return end
 		d.LastShock=now; local radius=9+level; local visual=Instance.new("Part"); visual.Shape=Enum.PartType.Ball; visual.Size=Vector3.new(1,1,1); visual.Position=root.Position; visual.Anchored=true; visual.CanCollide=false; visual.Transparency=.65; visual.Color=Color3.fromRGB(75,190,255); visual.Parent=effectsFolder
