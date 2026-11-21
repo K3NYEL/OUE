@@ -136,7 +136,7 @@ end)
 UIS.InputChanged:Connect(function(input)
  if input.UserInputType==Enum.UserInputType.MouseWheel and current.Weapon then local i=((current.Weapon+(if input.Position.Z>0 then 1 else -1)-1)%#Config.Weapons)+1; Action:FireServer("Equip",i) end
 end)
-player.CharacterAdded:Connect(function() toggleShop(false); UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false end)
+player.CharacterAdded:Connect(function() toggleShop(false); togglePause(false); UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false end)
 UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false
 
 -- Viewmodel local: no replica piezas al servidor.
