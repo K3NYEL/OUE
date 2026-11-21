@@ -560,7 +560,8 @@ Action.OnServerEvent:Connect(function(player: Player, action: string, value: any
 	elseif action=="Shop" and typeof(value)=="table" then
 		if intermission<=0 then return end
 		if typeof(value.Category)=="string" and typeof(value.Key)=="string" then buy(player,value.Category,value.Key,if typeof(value.Index)=="number" then value.Index else nil) end
-	elseif action=="Pause" and typeof(value)=="boolean" then d.Paused=value; if not value then sendState(player) end\n\telseif action=="Sprint" and typeof(value)=="boolean" then d.Sprinting=value
+	elseif action=="Pause" and typeof(value)=="boolean" then d.Paused=value; if not value then sendState(player) end
+	elseif action=="Sprint" and typeof(value)=="boolean" then d.Sprinting=value
 	elseif action=="StartWave" then if intermission>0 then intermission=.01 end
 	elseif action=="Pickup" and typeof(value)=="Instance" and value:IsA("BasePart") then
 		local root=rootOf(player); if root and (root.Position-value.Position).Magnitude<8 then pickupTouched(value,player) end
@@ -571,6 +572,7 @@ RunService.Heartbeat:Connect(function(dt)
 	for player,d in pairs(data) do
 		local hum=humanoidOf(player)
 		if hum and hum.Health>0 then
+			if d.Paused then hum.WalkSpeed=0; d.Sprinting=false; continue end
 			if d.Sprinting and d.Stamina>0 then d.Stamina=math.max(0,d.Stamina-28*dt); hum.WalkSpeed=24*(1+.08*d.Perks.Speed)
 			else d.Stamina=math.min(100,d.Stamina+18*dt); hum.WalkSpeed=16*(1+.08*d.Perks.Speed) end
 			if d.Stamina<=0 then d.Sprinting=false end
