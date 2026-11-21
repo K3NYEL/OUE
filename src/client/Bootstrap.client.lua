@@ -84,7 +84,7 @@ end
 local function togglePause(value:boolean)
  paused=value; pausePanel.Visible=value
  Action:FireServer("Pause",value)
- if value then UserInputService.MouseBehavior=Enum.MouseBehavior.Default; UserInputService.MouseIconEnabled=true
+ if value then UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true
  else UserInputService.MouseBehavior=Enum.MouseBehavior.LockCenter; UserInputService.MouseIconEnabled=false end
 end
 resume.Activated:Connect(function() togglePause(false) end)
@@ -116,7 +116,9 @@ end
 local function sprint(value:boolean) if sprinting~=value then sprinting=value; Action:FireServer("Sprint",value) end end
 UIS.InputBegan:Connect(function(input,processed)
  if processed then return end
- if input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.P then if shopOpen then toggleShop(false) else togglePause(not paused) end\n elseif paused then return\n elseif input.UserInputType==Enum.UserInputType.MouseButton1 then firing=true; fire()
+ if input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.P then if shopOpen then toggleShop(false) else togglePause(not paused) end
+ elseif paused then return
+ elseif input.UserInputType==Enum.UserInputType.MouseButton1 then firing=true; fire()
  elseif input.KeyCode==Enum.KeyCode.R then Action:FireServer("Reload")
  elseif input.KeyCode==Enum.KeyCode.LeftShift then sprint(true)
  elseif input.KeyCode==Enum.KeyCode.Q then Action:FireServer("Ability","dash")
