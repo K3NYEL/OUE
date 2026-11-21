@@ -254,42 +254,68 @@ POS_FILAS = ([(-.86, .33 - .04 * k) for k in range(5)] + [(-.86, .06 - .04 * k) 
              + [(.08, .33 - .04 * k) for k in range(4)] + [(.08, .10), (.08, .06)])
 filas = [texto('', p, .95, color.white, False, ui_tienda) for p in POS_FILAS]
 
-# --- HUD ---
-txt_puntos = texto('', (-.86, .47), 1.4, color.yellow)
-txt_record = texto('', (-.86, .43), 1.0, color.light_gray)
-txt_cred = texto('', (-.86, .39), 1.3, color.gold)
-txt_combo = texto('', (-.86, .35), 1.3, color.orange)
-txt_buff = texto('', (-.86, .31), 1.1, color.magenta)
-txt_furia = texto('', (-.86, .27), 1.3, color.orange)
-txt_oleada = texto('', (0, .46), 2, color.white, True)
-txt_enemigos = texto('', (0, .41), 1.1, color.light_gray, True)
-txt_hint = texto('', (0, .34), 1.2, color.yellow, True)
+# --- HUD GENERAL ---
+def panel_hud(pos, escala, alpha=.88):
+    return _entity_factory(parent=hud, model='quad', position=(pos[0], pos[1], .65),
+                           scale=escala, color=Vec4(.025, .04, .065, alpha))
+
+def acento_hud(pos, escala):
+    return _entity_factory(parent=hud, model='quad', position=(pos[0], pos[1], .62),
+                           scale=escala, color=color.rgb(220, 45, 62))
+
+# Paneles: estadisticas, oleada, estado del jugador y habilidades.
+panel_hud((-.69, .405), (.55, .205))
+acento_hud((-.69, .505), (.55, .006))
+panel_hud((0, .445), (.48, .145))
+acento_hud((0, .515), (.48, .006))
+panel_hud((-.69, -.405), (.55, .19))
+acento_hud((-.69, -.315), (.55, .006))
+panel_hud((0, -.445), (.88, .125))
+
+txt_puntos = texto('', (-.94, .455), 1.15, color.white)
+txt_record = texto('', (-.94, .405), .88, color.light_gray)
+txt_cred = texto('', (-.67, .455), 1.05, color.gold)
+txt_combo = texto('', (-.42, .405), .88, color.orange)
+txt_buff = texto('', (-.94, .355), .82, color.magenta)
+txt_furia = texto('', (-.67, .355), .82, color.orange)
+txt_oleada = texto('', (0, .46), 1.65, color.white, True)
+txt_enemigos = texto('', (0, .415), .92, color.light_gray, True)
+txt_hint = texto('', (0, .365), .82, color.yellow, True)
 txt_aviso = texto('', (0, .2), 2.4, color.white, True)
-txt_vida = texto('', (-.86, -.395), 1.0, color.white)
+txt_vida = texto('', (-.94, -.365), .92, color.white)
+txt_stamina = texto('', (-.94, -.445), .78, color.azure)
 txt_arma = texto('', (.58, -.36), 1.6, color.white)
 hitmarker = texto('x', (0, 0), 2.5, color.white, True)
 hitmarker.enabled = False
 
 txt_hab = {}
-for xh, k in zip((-.27, -.09, .09, .27), HABS):
-    txt_hab[k] = texto('', (xh, -.43), 1.0, color.white, True)
+for xh, k in zip((-.33, -.11, .11, .33), HABS):
+    txt_hab[k] = texto('', (xh, -.445), .82, color.white, True)
 
 
 def barra(pos, tam, col):
-    bg = _entity_factory(parent=hud, model='quad', color=color.dark_gray, scale=tam, position=pos)
-    return _entity_factory(parent=bg, model='quad', color=col, origin_x=-.5, x=-.5, z=-.01)
+    bg = _entity_factory(parent=hud, model='quad', color=color.rgb(38, 48, 62),
+                         scale=tam, position=(pos[0], pos[1], .1))
+    return _entity_factory(parent=bg, model='quad', color=col, origin_x=-.5,
+                           x=-.5, z=-.01, scale=(1, 1))
 
 
-barra_vida = barra((-.63, -.44), (.46, .035), color.red)
-barra_stamina = barra((-.63, -.48), (.46, .015), color.azure)
+barra_vida = barra((-.69, -.405), (.45, .025), color.rgb(230, 65, 78))
+barra_stamina = barra((-.69, -.485), (.45, .018), color.rgb(55, 165, 225))
 
-for dx, dy, sx, sy in ((-.014, 0, .012, .003), (.014, 0, .012, .003),
-                       (0, .014, .003, .012), (0, -.014, .003, .012)):
-    _entity_factory(parent=hud, model='quad', color=color.white, position=(dx, dy), scale=(sx, sy))
+# Reticula central, fina y discreta.
+for dx, dy, sx, sy in ((-.012, 0, .009, .002), (.012, 0, .009, .002),
+                       (0, .012, .002, .009), (0, -.012, .002, .009)):
+    _entity_factory(parent=hud, model='quad', color=color.white,
+                    position=(dx, dy), scale=(sx, sy))
 
-_entity_factory(parent=hud, model='circle', scale=.3, position=(.72, .26), color=color.dark_gray, z=.01)
-radar = _entity_factory(parent=hud, model='circle', scale=.28, position=(.72, .26), color=Vec4(0, 0, 0, .65))
-_entity_factory(parent=radar, model='circle', scale=.07, color=color.white, z=-.01)
+# Radar con aro exterior, zona de lectura y centro del jugador.
+_entity_factory(parent=hud, model='circle', scale=.315, position=(.72, .26, .04),
+                color=Vec4(.12, .17, .23, .95))
+radar = _entity_factory(parent=hud, model='circle', scale=.285, position=(.72, .26, .02),
+                        color=Vec4(.015, .03, .05, .94))
+_entity_factory(parent=radar, model='circle', scale=.018, color=color.white, z=-.02)
+_entity_factory(parent=radar, model='circle', scale=.68, color=Vec4(.2, .3, .4, .35), z=-.015)
 puntos_radar = []
 
 
@@ -1260,7 +1286,8 @@ def actualizar_hud(dt):
     poner(txt_combo, f'COMBO x{mult_combo():.1f}' if S.combo > 1 else '')
     poner(txt_buff, f'DANO x2: {int(S.buff_t) + 1}s' if S.buff_t > 0 else '')
     poner(txt_furia, f'FURIA: {int(S.furia_t) + 1}s' if S.furia_t > 0 else '')
-    poner(txt_vida, f'Vida {int(S.salud)}/{S.salud_max}')
+    poner(txt_vida, f'VIDA  {int(S.salud)}/{S.salud_max}')
+    poner(txt_stamina, f'RESISTENCIA  {int(S.stamina)}%')
     if S.recarga > 0:
         estado_arma = 'RECARGANDO...'
     elif S.furia_t > 0:
@@ -1274,11 +1301,11 @@ def actualizar_hud(dt):
     for k, (tecla, nombre) in HABS.items():
         cd = S.cdh[k]
         if k == 'furia' and S.furia_t > 0:
-            s, col = f'[{tecla}] {nombre}\nACTIVA', color.orange
+            s, col = f'{tecla}  {nombre}\nACTIVA', color.orange
         elif cd > 0:
-            s, col = f'[{tecla}] {nombre}\n{int(cd) + 1}s', color.gray
+            s, col = f'{tecla}  {nombre}\n{cd:.1f}s', color.rgb(145, 157, 173)
         else:
-            s, col = f'[{tecla}] {nombre}\nLISTA', color.lime
+            s, col = f'{tecla}  {nombre}\nLISTA', color.rgb(95, 220, 155)
         poner(txt_hab[k], s)
         txt_hab[k].color = col
 
