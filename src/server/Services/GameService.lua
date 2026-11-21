@@ -583,7 +583,7 @@ RunService.Heartbeat:Connect(function(dt)
 		local hum=humanoidOf(player)
 		if hum and hum.Health>0 then
 			if d.Paused then hum.WalkSpeed=0; d.Sprinting=false; continue end
-			if d.Sprinting and d.Stamina>0 then d.Stamina=math.max(0,d.Stamina-28*dt); hum.WalkSpeed=24*(1+.08*d.Perks.Speed)
+			if d.Sprinting and d.Stamina>0 and hum.MoveDirection.Magnitude>.05 then d.Stamina=math.max(0,d.Stamina-28*dt); hum.WalkSpeed=24*(1+.08*d.Perks.Speed)
 			else d.Stamina=math.min(100,d.Stamina+18*dt); hum.WalkSpeed=16*(1+.08*d.Perks.Speed) end
 			if d.Stamina<=0 then d.Sprinting=false end
 			if os.clock()>d.ComboUntil then d.Combo=0 end
