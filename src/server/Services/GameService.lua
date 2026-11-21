@@ -352,8 +352,8 @@ local function shoot(player: Player, direction: Vector3)
 			local result=workspace:Raycast(origin,dir*remaining,params)
 			if not result then break end
 			local target=result.Instance:FindFirstAncestorOfClass("Model")
+			if weapon.Explosion>0 then explosion(player,result.Position,weapon.Explosion,damage); break end
 			if target and target.Parent==enemiesFolder then
-				if weapon.Explosion>0 then explosion(player,result.Position,weapon.Explosion,damage); break end
 				local enemyHum=target:FindFirstChildOfClass("Humanoid")
 				local isHead=result.Instance.Name=="Head"
 				if enemyHum then damageEnemy(player,target,damage,isHead) end
@@ -364,10 +364,16 @@ local function shoot(player: Player, direction: Vector3)
 		end
 	end
 	if d.Magazine[d.Weapon]<=0 and d.Reserve[d.Weapon]>0 and not fury then
-		d.ReloadUntil=now+stat(player,"Reload")
-		task.delay(stat(player,"Reload"),function()
-			if not data[player] then return end
-			local needed=math.max(0,stat(player,"Magazine")-d.Magazine[d.Weapon]); local take=math.min(needed,d.Reserve[d.Weapon]); d.Magazine[d.Weapon]+=take; d.Reserve[d.Weapon]-=take; sendState(player)
+		local weaponIndex=d.Weapon
+		local duration=stat(player,"Reload")
+		local finishAt=now+duration
+		d.ReloadUntil=finishAt
+		task.delay(duration,function()
+			if data[player]~=d or d.ReloadUntil~=finishAt then return end
+			local maxMagazine=math.floor(Config.Weapons[weaponIndex].Magazine*(1+.25*d.WeaponLevels[weaponIndex].Magazine)+.5)
+			local needed=math.max(0,maxMagazine-d.Magazine[weaponIndex])
+			local take=math.min(needed,d.Reserve[weaponIndex])
+			d.Magazine[weaponIndex]+=take; d.Reserve[weaponIndex]-=take; d.ReloadUntil=0; sendState(player)
 		end)
 	end
 	sendState(player)
