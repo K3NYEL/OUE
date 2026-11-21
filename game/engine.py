@@ -1872,7 +1872,10 @@ def actualizar_oleadas(dt):
 
     if S.cola:
         S.spawn_t -= dt
-        max_sim = min(20, 5 + S.oleada * 2)
+        # Mantiene una horda activa acotada: cada enemigo tiene varias
+        # entidades visuales y actualiza IA/colisiones en cada frame.
+        # El total de enemigos de la oleada sigue creciendo por separado.
+        max_sim = min(12, 5 + S.oleada)
         if S.spawn_t <= 0 and len(enemigos) < max_sim:
             tipo = S.cola.pop(0)
             e = Enemigo(tipo, pos_spawn())
