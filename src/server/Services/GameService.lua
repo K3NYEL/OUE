@@ -500,6 +500,11 @@ local function setupPlayer(player: Player)
 	player.CharacterAdded:Connect(function(character)
 		local hum=character:WaitForChild("Humanoid") :: Humanoid
 		hum.MaxHealth=100+20*d.Perks.Health; hum.Health=hum.MaxHealth; hum.WalkSpeed=16*(1+.08*d.Perks.Speed)
+		hum.HealthChanged:Connect(function() sendState(player) end)
+		hum.Died:Connect(function()
+			if d.Points>d.Record then d.Record=d.Points; pcall(function() recordStore:SetAsync(tostring(player.UserId),d.Record) end) end
+			notify(player,"HAS CAIDO | Oleada "..wave.." | Puntos: "..d.Points,Color3.fromRGB(255,70,80))
+		end)
 		task.wait(.5); sendState(player)
 	end)
 	if player.Character then local h=humanoidOf(player); if h then h.MaxHealth=100; h.Health=100 end end
