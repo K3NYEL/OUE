@@ -436,7 +436,7 @@ local function useAbility(player: Player, key: string)
 end
 
 local function upgradeCost(base: number, level: number): number return base*(level+1) end
-local function buy(player: Player, category: string, key: string)
+local function buy(player: Player, category: string, key: string, requestedIndex: number?)
 	local d=data[player]; if not d then return end
 	local cost=0; local action: (() -> ())?=nil
 	if category=="weapon" then
@@ -515,7 +515,7 @@ Action.OnServerEvent:Connect(function(player: Player, action: string, value: any
 	elseif action=="Ability" and typeof(value)=="string" then useAbility(player,value)
 	elseif action=="Shop" and typeof(value)=="table" then
 		if intermission<=0 then return end
-		if typeof(value.Category)=="string" and typeof(value.Key)=="string" then buy(player,value.Category,value.Key) end
+		if typeof(value.Category)=="string" and typeof(value.Key)=="string" then buy(player,value.Category,value.Key,if typeof(value.Index)=="number" then value.Index else nil) end
 	elseif action=="Sprint" and typeof(value)=="boolean" then d.Sprinting=value
 	elseif action=="StartWave" then if intermission>0 then intermission=.01 end
 	elseif action=="Pickup" and typeof(value)=="Instance" and value:IsA("BasePart") then
