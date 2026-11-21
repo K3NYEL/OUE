@@ -538,10 +538,14 @@ txt_hint = th("", L + CW_TL - PAD, T - 0.083, 0.85, color.white, "r")
 barra_enemigos = barra((L + CW_TL / 2, T - 0.106), (CW_TL - 2 * PAD, 0.008), ROJO_H)
 txt_puntos = th("", L + PAD, T - 0.138, 0.95, color.white)
 txt_cred = th("", L + CW_TL - PAD, T - 0.138, 1.05, ORO, "r")
-txt_combo = th("", L + PAD, T - CH_TL - 0.025, 0.7, NARANJA_H)
-txt_buff = th("", L + PAD, T - CH_TL - 0.055, 0.65, color.magenta)
+# Combo independiente: solo aparece cuando la racha está activa.
+box_combo = _entity_factory(parent=hud_info, enabled=False)
+tarjeta(box_combo, 0, T - 0.122, 0.30, 0.044, PANEL, NARANJA_H)
+caja(box_combo, -0.147, T - 0.122, 0.006, 0.044, NARANJA_H, 0.6)
+txt_combo = th("", 0, T - 0.133, 0.82, NARANJA_H, "c", box_combo)
+txt_buff = th("", L + PAD, T - CH_TL - 0.025, 0.65, color.magenta)
 
-# 2. Capsula de aviso / combo (arriba al centro)
+# 2. Cápsula de aviso (arriba al centro)
 box_aviso = _entity_factory(parent=hud_info, enabled=False)
 tarjeta(box_aviso, 0, T - 0.05, 0.42, 0.056)
 caja(box_aviso, -0.21, T - 0.05, 0.006, 0.056, ORO, 0.6)
@@ -612,6 +616,7 @@ txt_vida_max = th("", X_VIDA_R, B + 0.097, 0.85, GRIS, "r")
 txt_vida_n = th("", X_VIDA_R - 0.09, B + 0.097, 1.7, color.white, "r")
 barra_vida = barra((L + CW_BL / 2, B + 0.063), (CW_BL - 2 * PAD, 0.017), VERDE)
 barra_stamina = barra((L + CW_BL / 2, B + 0.041), (CW_BL - 2 * PAD, 0.005), CIAN)
+# El color de vida comunica el estado sin depender únicamente del número.
 th("RESISTENCIA", L + PAD, B + 0.022, 0.55, GRIS)
 
 # 5. Habilidades: anillo con progreso + tecla debajo
@@ -2023,8 +2028,12 @@ def actualizar_hud(dt):
         poner(txt_hint, f"{total_en} / {max_en}")
         barra_enemigos.scale_x = clamp(total_en / max_en, 0.0001, 1.0)
 
-    poner(txt_combo, f"COMBO  x{mult_combo():.1f}" if S.combo > 1 else "")
+    combo_activo = S.combo > 1
+    if box_combo.enabled != combo_activo:
+        box_combo.enabled = combo_activo
+    poner(txt_combo, f"COMBO  x{mult_combo():.1f}" if combo_activo else "")
     poner(txt_buff, f"DANO x2  {int(S.buff_t) + 1}s" if S.buff_t > 0 else "")
+    txt_buff.color = color.magenta if S.buff_t > 0 else GRIS
 
     # --- vida ---
     salud_max = max(S.salud_max, 1)
@@ -2033,7 +2042,9 @@ def actualizar_hud(dt):
     poner(txt_vida_n, f"{int(S.salud)}")
     txt_vida_n.x = X_VIDA_R - ancho(smax_txt, 0.85) - 0.012
     txt_vida_n.color = ROJO_H if S.salud < salud_max * 0.3 else color.white
-    barra_vida.scale_x = clamp(S.salud / salud_max, 0.0001, 1.0)
+    proporcion_vida = clamp(S.salud / salud_max, 0.0001, 1.0)
+    barra_vida.scale_x = proporcion_vida
+    barra_vida.color = ROJO_H if proporcion_vida <= 0.30 else (NARANJA_H if proporcion_vida <= 0.60 else VERDE)
     barra_stamina.scale_x = clamp(S.stamina / 100.0, 0.0001, 1.0)
 
     # --- municion ---
