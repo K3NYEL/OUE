@@ -251,7 +251,24 @@ local function createEnemy(kind: string): Model?
 					end
 				end
 			else
-				if os.clock()-lastPath>1 then\n\t\t\t\t\tlastPath=os.clock()\n\t\t\t\t\tlocal path=PathfindingService:CreatePath({AgentRadius=math.max(1,cfg.Size.X/2),AgentHeight=cfg.Size.Y,AgentCanJump=true})\n\t\t\t\t\tlocal ok=pcall(function() path:ComputeAsync(root.Position,targetRoot.Position) end)\n\t\t\t\t\tif ok and path.Status==Enum.PathStatus.Success then waypoints=path:GetWaypoints(); waypointIndex=math.min(2,#waypoints) else waypoints=nil end\n\t\t\t\t\tif waypoints and waypoints[waypointIndex] then\n\t\t\t\t\t\tlocal waypoint=waypoints[waypointIndex]\n\t\t\t\t\t\tif waypoint.Action==Enum.PathWaypointAction.Jump then hum.Jump=true end\n\t\t\t\t\t\thum:MoveTo(waypoint.Position)\n\t\t\t\t\telse hum:MoveTo(targetRoot.Position) end\n\t\t\t\tend
+				if os.clock()-lastPath>1 then
+					lastPath=os.clock()
+					local path=PathfindingService:CreatePath({AgentRadius=math.max(1,cfg.Size.X/2),AgentHeight=cfg.Size.Y,AgentCanJump=true})
+					local ok=pcall(function() path:ComputeAsync(root.Position,targetRoot.Position) end)
+					if ok and path.Status==Enum.PathStatus.Success then
+						waypoints=path:GetWaypoints()
+						waypointIndex=math.min(2,#waypoints)
+					else
+						waypoints=nil
+					end
+					if waypoints and waypoints[waypointIndex] then
+						local waypoint=waypoints[waypointIndex]
+						if waypoint.Action==Enum.PathWaypointAction.Jump then hum.Jump=true end
+						hum:MoveTo(waypoint.Position)
+					else
+						hum:MoveTo(targetRoot.Position)
+					end
+				end
 				if distance<math.max(cfg.Size.X/2+2,3) and os.clock()-lastAttack>1 then lastAttack=os.clock(); targetHum:TakeDamage(cfg.Damage) end
 			end
 			task.wait(.25)
