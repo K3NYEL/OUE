@@ -9,6 +9,10 @@ from .config import *
 from .audio import *
 from .balistica import Retroceso, Bloom, direccion_en_cono
 from .miras import crear_miras, _textura_anillo
+from .player import Personaje
+from .player_animation import AnimadorPersonaje
+from .player_camera import CamaraJugador
+from .weapon_mount import MontajeArma
 
 app = Ursina(title="Cazador de Oleadas v2")
 # Ursina exposes several runtime proxies that its type stubs model incompletely.
@@ -235,28 +239,14 @@ def actualizar_obstaculos_visibles():
             del obstaculos_visibles[i]
 
 
-arma_modelo = _entity_factory(
-    parent=camera,
-    model="cube",
-    position=(0.4, -0.32, 0.9),
-    scale=(0.1, 0.14, 0.5),
-    color=color.dark_gray,
-)
-canon = _entity_factory(
-    parent=arma_modelo,
-    model="cube",
-    position=(0, 0.25, 0.7),
-    scale=(0.6, 0.4, 0.7),
-    color=color.black,
-)
-fogonazo = _entity_factory(
-    parent=camera,
-    model="quad",
-    position=(0.4, -0.2, 1.5),
-    scale=0.35,
-    color=color.yellow,
-    enabled=False,
-)
+# El arma pertenece al personaje (mano derecha), no a la camara.
+personaje = Personaje(jugador)
+montaje = MontajeArma(personaje)
+arma_modelo = montaje.pivote          # pivote del arma (ocultable al apuntar con mira)
+fogonazo = montaje.fogonazo
+animador = AnimadorPersonaje(personaje, jugador)
+# Los enemigos no deben acercar la camara TPS (llevan el atributo `enemigo`).
+cam_jugador = CamaraJugador(jugador, personaje, lambda e: getattr(e, "enemigo", None) is not None)
 
 # =====================================================================
 #  INTERFAZ
@@ -1286,10 +1276,8 @@ class Torreta(Entity):
 # =====================================================================
 #  ARMAS
 # =====================================================================
-def aplicar_arma():
-    a = ARMAS[S.arma]
-    arma_modelo.color = a["color"]
-    arma_modelo.scale = a["escala"]
+def aplicar_arma(animar=True):
+    montaje.equipar(S.arma, ARMAS[S.arma], animar)
 
 
 def equipar(i):
@@ -1365,8 +1353,8 @@ def disparar():
 
     # La punteria se fija ANTES de aplicar el retroceso de este disparo.
     ads = bool(_held_keys["right mouse"])
-    fwd, right, up = _v3(camera.forward), _v3(camera.right), _v3(camera.up)
-    origen = camera.world_position
+    origen, dir_mira = cam_jugador.apuntar()
+    fwd, right, up = _v3(dir_mira), _v3(camera.right), _v3(camera.up)
     disp = dispersion_actual(a, ads)
 
     # Retroceso vertical + horizontal acumulado (se recupera solo en update()).
@@ -1459,14 +1447,15 @@ def usar_torreta():
         return
     n = S.hab["torreta"]
     maximo = 1 + n // 2
+    origen, dir_mira = cam_jugador.apuntar()
     hit = raycast(
-        camera.world_position,
-        camera.forward,
+        origen,
+        dir_mira,
         distance=18,
         ignore=[jugador],
         debug=False,
     )
-    p = hit.world_point if hit.hit else camera.world_position + camera.forward * 6
+    p = hit.world_point if hit.hit else origen + dir_mira * 6
     p = Vec3(clamp(p.x, -ARENA + 3, ARENA - 3), 0, clamp(p.z, -ARENA + 3, ARENA - 3))
     while len(torretas) >= maximo:
         torretas[0].quitar()
@@ -2207,9 +2196,9 @@ def update():
     bloom.actualizar(dt)
     actualizar_mira(ads, ARMAS[S.arma])
     actualizar_brujula()
-    arma_modelo.z = 0.9 - 0.12 * S.retroceso
-    objetivo_rot = 50 if S.recarga > 0 else 0
-    arma_modelo.rotation_x = lerp(arma_modelo.rotation_x, objetivo_rot, min(1, 12 * dt))
+    montaje.actualizar(dt, S.retroceso, S.recarga > 0)
+    cam_jugador.actualizar(dt, ads)
+    animador.actualizar(dt, bool(correr), personaje.raiz.enabled)
 
     # --- oleadas y enemigos ---
     actualizar_oleadas(dt)
@@ -2285,6 +2274,8 @@ def input(key):
             pausar()
         elif key == "left mouse down":
             disparar()
+        elif key == TECLA_CAMARA:
+            aviso("Camara: " + cam_jugador.alternar().upper(), 0.8, color.white)
         elif key == "r":
             recargar()
         elif key in ("1", "2", "3", "4", "5"):
@@ -2340,7 +2331,7 @@ def input(key):
 
 
 poner(txt_menu_record, f"Record: {S.record}")
-aplicar_arma()
+aplicar_arma(False)
 
 
 def run():

@@ -1,0 +1,547 @@
+diff --git a/README.md b/README.md
+index a72e9e9..716d737 100644
+--- a/README.md
++++ b/README.md
+@@ -29,4 +29,17 @@ En Windows, activa el entorno con:
+ - `game/config.py`: configuración del juego.
+ - `game/audio.py`: carga y reproducción de audio.
+ 
++- `game/player.py`: personaje 3D (cuerpo, cabeza, brazos, piernas, ancla de la mano).
++- `game/player_animation.py`: animacion procedural (idle, caminar, correr, saltar, caer).
++- `game/player_camera.py`: camara FPS/TPS con colision y mezcla suave.
++- `game/weapon_mount.py`: montaje del arma en la mano y animaciones equipar/recarga/retroceso.
++- `game/modelos.py`: carga de modelos `.glb` de armas.
++
++## Perspectivas
++
++`V` alterna FPS/TPS (`TECLA_CAMARA` y `CAMARA_TPS` en `config.py`). El movimiento sigue siendo el
++`FirstPersonController`; el raton orbita la camara alrededor del personaje. En TPS, apuntar
++(clic derecho) acerca la camara a FPS para usar las miras. Los disparos salen de los ojos y
++convergen en la mira, tambien en TPS.
++
+ El proyecto mantiene Python + Ursina como única implementación.
+\ No newline at end of file
+diff --git a/game/config.py b/game/config.py
+index e932316..8f47c41 100644
+--- a/game/config.py
++++ b/game/config.py
+@@ -47,7 +47,8 @@ ARMAS: list[dict[str, Any]] = [
+          kick_v=3.2, kick_h=.5, tope=0, recup=4, mira='mildot', fov_ads=22,
+          explosion=0, penetra=3, precio=600, color=color.hsv(210, .3, .25), escala=(.08, .12, 1.10),
+          # modelo 3D: rot (0, 90, 0) gira el canon (-X en el .glb) hacia +Z (adelante)
+-         modelo=dict(archivo='Barret M82.glb', escala=.26, pos=(0, 0, 0), rot=(0, 90, 0),
++         modelo=dict(archivo='Barret M82.glb', escala=.26, pos=(0, 0, .18), rot=(0, 90, 0),
++                     mano_izq=(.30, -.17, 1.12),   # apoyo de la mano izquierda (espacio de los hombros)
+                      # color por pieza (nombres de los nodos del .glb)
+                      colores=dict(Cuerpo=color.rgb32(88, 94, 84), Gatillo=color.rgb32(30, 30, 30),
+                                   Cargador=color.rgb32(28, 30, 34), Boquilla=color.rgb32(22, 24, 26),
+@@ -71,4 +72,27 @@ MEJORAS_ARMA: list[tuple[str, str, int, str]] = [
+     ('rec', 'Recarga', 80, 'Recarga 15% mas rapida por nivel.'),
+ ]
+ 
+-# =====================================================================
+\ No newline at end of file
++# =====================================================================
++
++# =====================================================================
++#  PERSONAJE Y CAMARA (player*.py, weapon_mount.py)
++# =====================================================================
++TECLA_CAMARA = 'v'   # alterna FPS <-> TPS
++
++CAMARA_TPS = dict(
++    distancia=4.2,        # metros detras del personaje
++    hombro=.55,           # desplazamiento lateral (+ = derecha)
++    altura=.35,           # por encima de los ojos
++    suavizado=9.0,        # velocidad de la transicion FPS<->TPS
++    margen=.30,           # separacion minima con paredes/obstaculos
++    umbral_cuerpo=.30,    # a partir de esta distancia relativa se dibuja el cuerpo completo
++)
++
++PERSONAJE = dict(
++    ropa=color.rgb32(62, 72, 58),
++    chaleco=color.rgb32(36, 42, 48),
++    guante=color.rgb32(18, 18, 20),
++    casco=color.rgb32(44, 50, 46),
++    visor=color.rgb32(70, 140, 170),
++    acento=color.rgb32(225, 65, 75),
++)
+diff --git a/game/engine.py b/game/engine.py
+index 4043713..4bcee17 100644
+--- a/game/engine.py
++++ b/game/engine.py
+@@ -9,7 +9,10 @@ from .config import *
+ from .audio import *
+ from .balistica import Retroceso, Bloom, direccion_en_cono
+ from .miras import crear_miras, _textura_anillo
+-from .modelos import cargar_modelo_arma
++from .player import Personaje
++from .player_animation import AnimadorPersonaje
++from .player_camera import CamaraJugador
++from .weapon_mount import MontajeArma
+ 
+ app = Ursina(title="Cazador de Oleadas v2")
+ # Ursina exposes several runtime proxies that its type stubs model incompletely.
+@@ -236,28 +239,14 @@ def actualizar_obstaculos_visibles():
+             del obstaculos_visibles[i]
+ 
+ 
+-arma_modelo = _entity_factory(
+-    parent=camera,
+-    model="cube",
+-    position=(0.4, -0.32, 0.9),
+-    scale=(0.1, 0.14, 0.5),
+-    color=color.dark_gray,
+-)
+-canon = _entity_factory(
+-    parent=arma_modelo,
+-    model="cube",
+-    position=(0, 0.25, 0.7),
+-    scale=(0.6, 0.4, 0.7),
+-    color=color.black,
+-)
+-fogonazo = _entity_factory(
+-    parent=camera,
+-    model="quad",
+-    position=(0.4, -0.2, 1.5),
+-    scale=0.35,
+-    color=color.yellow,
+-    enabled=False,
+-)
++# El arma pertenece al personaje (mano derecha), no a la camara.
++personaje = Personaje(jugador)
++montaje = MontajeArma(personaje)
++arma_modelo = montaje.pivote          # pivote del arma (ocultable al apuntar con mira)
++fogonazo = montaje.fogonazo
++animador = AnimadorPersonaje(personaje, jugador)
++# Los enemigos no deben acercar la camara TPS (llevan el atributo `enemigo`).
++cam_jugador = CamaraJugador(jugador, personaje, lambda e: getattr(e, "enemigo", None) is not None)
+ 
+ # =====================================================================
+ #  INTERFAZ
+@@ -1287,36 +1276,8 @@ class Torreta(Entity):
+ # =====================================================================
+ #  ARMAS
+ # =====================================================================
+-_modelos_arma = {}   # indice de arma -> Entity del .glb (se crea la primera vez que se equipa)
+-
+-
+-def _modelo_3d(i):
+-    cfg = ARMAS[i].get("modelo")
+-    if not cfg:
+-        return None
+-    if i not in _modelos_arma:
+-        _modelos_arma[i] = cargar_modelo_arma(cfg, arma_modelo)
+-    return _modelos_arma[i]
+-
+-
+-def aplicar_arma():
+-    a = ARMAS[S.arma]
+-    for ent in _modelos_arma.values():
+-        if ent:
+-            ent.enabled = False
+-    modelo = _modelo_3d(S.arma)
+-    if modelo:
+-        # Con modelo 3D el cubo solo es el pivote: sin forma, escala 1 y sin tinte.
+-        arma_modelo.model = None
+-        arma_modelo.color = color.white
+-        arma_modelo.scale = 1
+-        canon.enabled = False
+-        modelo.enabled = True
+-    else:
+-        arma_modelo.model = "cube"
+-        arma_modelo.color = a["color"]
+-        arma_modelo.scale = a["escala"]
+-        canon.enabled = True
++def aplicar_arma(animar=True):
++    montaje.equipar(S.arma, ARMAS[S.arma], animar)
+ 
+ 
+ def equipar(i):
+@@ -1392,8 +1353,8 @@ def disparar():
+ 
+     # La punteria se fija ANTES de aplicar el retroceso de este disparo.
+     ads = bool(_held_keys["right mouse"])
+-    fwd, right, up = _v3(camera.forward), _v3(camera.right), _v3(camera.up)
+-    origen = camera.world_position
++    origen, dir_mira = cam_jugador.apuntar()
++    fwd, right, up = _v3(dir_mira), _v3(camera.right), _v3(camera.up)
+     disp = dispersion_actual(a, ads)
+ 
+     # Retroceso vertical + horizontal acumulado (se recupera solo en update()).
+@@ -1486,14 +1447,15 @@ def usar_torreta():
+         return
+     n = S.hab["torreta"]
+     maximo = 1 + n // 2
++    origen, dir_mira = cam_jugador.apuntar()
+     hit = raycast(
+-        camera.world_position,
+-        camera.forward,
++        origen,
++        dir_mira,
+         distance=18,
+         ignore=[jugador],
+         debug=False,
+     )
+-    p = hit.world_point if hit.hit else camera.world_position + camera.forward * 6
++    p = hit.world_point if hit.hit else origen + dir_mira * 6
+     p = Vec3(clamp(p.x, -ARENA + 3, ARENA - 3), 0, clamp(p.z, -ARENA + 3, ARENA - 3))
+     while len(torretas) >= maximo:
+         torretas[0].quitar()
+@@ -2234,9 +2196,9 @@ def update():
+     bloom.actualizar(dt)
+     actualizar_mira(ads, ARMAS[S.arma])
+     actualizar_brujula()
+-    arma_modelo.z = 0.9 - 0.12 * S.retroceso
+-    objetivo_rot = 50 if S.recarga > 0 else 0
+-    arma_modelo.rotation_x = lerp(arma_modelo.rotation_x, objetivo_rot, min(1, 12 * dt))
++    montaje.actualizar(dt, S.retroceso, S.recarga > 0)
++    cam_jugador.actualizar(dt, ads)
++    animador.actualizar(dt, bool(correr), personaje.raiz.enabled)
+ 
+     # --- oleadas y enemigos ---
+     actualizar_oleadas(dt)
+@@ -2312,6 +2274,8 @@ def input(key):
+             pausar()
+         elif key == "left mouse down":
+             disparar()
++        elif key == TECLA_CAMARA:
++            aviso("Camara: " + cam_jugador.alternar().upper(), 0.8, color.white)
+         elif key == "r":
+             recargar()
+         elif key in ("1", "2", "3", "4", "5"):
+@@ -2367,7 +2331,7 @@ def input(key):
+ 
+ 
+ poner(txt_menu_record, f"Record: {S.record}")
+-aplicar_arma()
++aplicar_arma(False)
+ 
+ 
+ def run():
+diff --git a/game/player.py b/game/player.py
+new file mode 100644
+index 0000000..618a7e6
+--- /dev/null
++++ b/game/player.py
+@@ -0,0 +1,86 @@
++"""Personaje 3D del jugador: cuerpo, cabeza, brazos y piernas (cubos tacticos).
++
++Jerarquia (todo cuelga del FirstPersonController, que sigue haciendo el movimiento):
++  jugador
++  |- raiz            cuerpo: torso, piernas (giran con el jugador)
++  `- camera_pivot    ojos (cabeceo del raton)
++     |- cabeza       sigue el cabeceo
++     `- rig          hombros: brazos + manos + arma (animables como un bloque)
++Un solo personaje; FPS/TPS solo cambian que partes se dibujan (ver player_camera).
++"""
++from ursina import Entity, Vec3, color
++import math
++
++from .config import PERSONAJE
++
++
++def _caja(padre, pos, esc, col, **kw):
++    return Entity(parent=padre, model='cube', position=pos, scale=esc, color=col, **kw)
++
++
++class Personaje:
++    def __init__(self, jugador):
++        c = PERSONAJE
++        self.jugador = jugador
++        self.pivote = jugador.camera_pivot
++
++        # --- cuerpo ---
++        self.raiz = Entity(parent=jugador)
++        self.torso = Entity(parent=self.raiz, position=(0, .95, 0))        # pivote en la cadera
++        _caja(self.torso, (0, .40, 0), (.46, .80, .26), c['ropa'])
++        _caja(self.torso, (0, .45, .02), (.50, .52, .30), c['chaleco'])     # chaleco
++        _caja(self.torso, (0, .45, -.20), (.34, .46, .14), c['chaleco'])    # mochila
++        _caja(self.torso, (.27, .70, 0), (.06, .12, .12), c['acento'])      # brazalete
++        _caja(self.torso, (0, .85, 0), (.14, .16, .14), c['ropa'])          # cuello
++        self.pierna_i = self._pierna(-.14)
++        self.pierna_d = self._pierna(.14)
++
++        # --- cabeza (sigue el cabeceo de la camara) ---
++        self.cabeza = Entity(parent=self.pivote)
++        _caja(self.cabeza, (0, 0, 0), (.32, .32, .32), c['casco'])
++        _caja(self.cabeza, (0, -.02, .165), (.28, .10, .03), c['visor'])
++        _caja(self.cabeza, (0, .17, 0), (.34, .05, .34), c['casco'])
++
++        # --- hombros / brazos / manos (rig animable) ---
++        self.rig = Entity(parent=self.pivote, position=(0, -.30, 0))
++        self.hombro_d = Entity(parent=self.rig, position=(.28, 0, 0))
++        self.hombro_i = Entity(parent=self.rig, position=(-.28, 0, 0))
++        self.mano_d = Entity(parent=self.rig, position=(.38, -.04, .72))    # ancla del arma
++        self.mano_i = Entity(parent=self.rig, position=(.30, -.17, 1.05))
++        self._brazo_d = self._brazo()
++        self._brazo_i = self._brazo()
++        for m in (self.mano_d, self.mano_i):
++            _caja(m, (0, 0, 0), (.11, .11, .11), c['guante'])
++        self._orientar(self._brazo_d, self.hombro_d, self.mano_d)
++        self.apuntar_mano_izq(self.mano_i.position)
++
++    # ---------------------------------------------------------------
++    def _pierna(self, x):
++        p = Entity(parent=self.raiz, position=(x, .95, 0))                   # pivote en la cadera
++        c = PERSONAJE
++        _caja(p, (0, -.47, 0), (.20, .95, .24), c['ropa'])
++        _caja(p, (0, -.90, .04), (.22, .12, .32), c['guante'])               # bota
++        return p
++
++    def _brazo(self):
++        # origin_z=-.5: el cubo crece desde su origen hacia +z (se orienta al escalar)
++        return Entity(parent=self.rig, model='cube', origin_z=-.5, color=PERSONAJE['ropa'])
++
++    def _orientar(self, brazo, hombro, mano):
++        """Apunta el brazo del hombro a la mano (ambos viven en el espacio del rig)."""
++        d = mano.position - hombro.position
++        largo = max(.01, d.length())
++        brazo.position = hombro.position
++        brazo.rotation = (-math.degrees(math.asin(d.y / largo)), math.degrees(math.atan2(d.x, d.z)), 0)
++        brazo.scale = (.09, .09, largo)
++
++    def apuntar_mano_izq(self, pos):
++        self.mano_i.position = Vec3(*pos)
++        self._orientar(self._brazo_i, self.hombro_i, self.mano_i)
++
++    # ---------------------------------------------------------------
++    def mostrar_cuerpo(self, visible):
++        """FPS: solo brazos y arma. TPS: personaje completo."""
++        if self.raiz.enabled != visible:
++            self.raiz.enabled = visible
++            self.cabeza.enabled = visible
+diff --git a/game/player_animation.py b/game/player_animation.py
+new file mode 100644
+index 0000000..04acd45
+--- /dev/null
++++ b/game/player_animation.py
+@@ -0,0 +1,66 @@
++"""Animacion procedural del personaje: idle, caminar, correr, saltar y caer.
++
++Solo mueve piernas/torso cuando el cuerpo se dibuja (TPS); los brazos (balanceo al
++andar) siempre, porque en FPS son lo unico visible. La velocidad se deduce del
++desplazamiento, asi sirve igual para andar, correr y el dash.
++"""
++import math
++from ursina import lerp
++
++IDLE, CAMINAR, CORRER, SALTAR, CAER = 'idle', 'caminar', 'correr', 'saltar', 'caer'
++_AMP = {IDLE: 0, CAMINAR: 32, CORRER: 55, SALTAR: 0, CAER: 0}
++
++
++class AnimadorPersonaje:
++    def __init__(self, personaje, jugador):
++        self.p = personaje
++        self.j = jugador
++        self.estado = IDLE
++        self.fase = 0.0
++        self.t = 0.0
++        self.vel = 0.0
++        self.amp = 0.0
++        self.lean = 0.0
++        self._x, self._y, self._z = jugador.x, jugador.y, jugador.z
++
++    def actualizar(self, dt, correr, cuerpo_visible):
++        if dt <= 0:
++            return
++        j, p = self.j, self.p
++        self.t += dt
++        dx, dy, dz = j.x - self._x, j.y - self._y, j.z - self._z
++        self._x, self._y, self._z = j.x, j.y, j.z
++        self.vel = lerp(self.vel, math.hypot(dx, dz) / dt, min(1, 12 * dt))
++
++        if not getattr(j, 'grounded', True):
++            self.estado = SALTAR if dy > 0 else CAER
++        elif self.vel < .4:
++            self.estado = IDLE
++        else:
++            self.estado = CORRER if correr else CAMINAR
++
++        mov = self.estado in (CAMINAR, CORRER)
++        self.fase += self.vel * dt * 1.9 if mov else 0
++        self.amp = lerp(self.amp, _AMP[self.estado], min(1, 10 * dt))
++
++        # brazos (siempre): balanceo vertical/lateral al andar
++        bob = math.sin(self.fase * 2) * (.018 if self.estado == CAMINAR else .03 if mov and correr else 0)
++        p.rig.y = -.30 + bob * (1 if mov else 0)
++        p.rig.x = math.sin(self.fase) * (.012 if mov else 0)
++
++        if not cuerpo_visible:
++            return
++
++        s = math.sin(self.fase) * self.amp
++        if self.estado == SALTAR:
++            ang_i, ang_d = 35, -10
++        elif self.estado == CAER:
++            ang_i = ang_d = 15
++        else:
++            ang_i, ang_d = s, -s
++        k = min(1, 14 * dt)
++        p.pierna_i.rotation_x = lerp(p.pierna_i.rotation_x, ang_i, k)
++        p.pierna_d.rotation_x = lerp(p.pierna_d.rotation_x, ang_d, k)
++        self.lean = lerp(self.lean, 10 if self.estado == CORRER else 0, min(1, 8 * dt))
++        p.torso.rotation_x = self.lean
++        p.torso.scale_y = 1 + math.sin(self.t * 1.8) * .008 * (self.estado == IDLE)
+diff --git a/game/player_camera.py b/game/player_camera.py
+new file mode 100644
+index 0000000..b549221
+--- /dev/null
++++ b/game/player_camera.py
+@@ -0,0 +1,87 @@
++"""Camaras FPS y TPS sobre el mismo FirstPersonController (sin segunda camara).
++
++La camara de Ursina cuelga de `camera_pivot`, asi que el raton la orbita alrededor del
++personaje. FPS = camara en el pivote; TPS = desplazada atras/arriba/hombro. Pasar de una
++a otra es una mezcla continua (`mezcla` 0..1), sin crear ni destruir nada.
++En TPS, apuntar (clic derecho) acerca la camara a FPS, asi las miras tacticas funcionan.
++"""
++from ursina import Vec3, camera, lerp, raycast, clamp
++
++from .config import CAMARA_TPS
++
++
++class CamaraJugador:
++    def __init__(self, jugador, personaje, es_ignorable):
++        self.j = jugador
++        self.p = personaje
++        self.pivote = jugador.camera_pivot
++        self.es_ignorable = es_ignorable     # p. ej. enemigos: no deben acercar la camara
++        self.cfg = CAMARA_TPS
++        self.modo = 'fps'
++        self.mezcla = 0.0
++        self.recorte = 1.0
++        self._en_reposo = False
++
++    def alternar(self):
++        self.modo = 'tps' if self.modo == 'fps' else 'fps'
++        return self.modo
++
++    @property
++    def ojo(self):
++        return self.pivote.world_position
++
++    def _rayo(self, origen, dir, dist, ignorar):
++        ign = list(ignorar)
++        hit = raycast(origen, dir, distance=dist, ignore=ign, debug=False)
++        for _ in range(4):
++            if hit.hit and self.es_ignorable(hit.entity):
++                ign.append(hit.entity)
++                hit = raycast(origen, dir, distance=dist, ignore=ign, debug=False)
++            else:
++                break
++        return hit
++
++    def actualizar(self, dt, ads=False):
++        c = self.cfg
++        objetivo = 1.0 if (self.modo == 'tps' and not ads) else 0.0
++        self.mezcla = lerp(self.mezcla, objetivo, min(1, c['suavizado'] * dt))
++        if abs(self.mezcla - objetivo) < .004:
++            self.mezcla = objetivo
++        m = self.mezcla
++
++        if m == 0:
++            self.p.mostrar_cuerpo(False)
++            if not self._en_reposo:
++                camera.position = Vec3(0, 0, 0)
++                self._en_reposo = True
++            return
++        self._en_reposo = False
++
++        local = Vec3(c['hombro'] * m, c['altura'] * m, -c['distancia'] * m)
++        piv = self.pivote
++        ojo = piv.world_position
++        destino = ojo + piv.right * local.x + piv.up * local.y + piv.forward * local.z
++        d = destino - ojo
++        largo = d.length()
++        k = 1.0
++        if largo > .01:
++            hit = self._rayo(ojo, d / largo, largo + c['margen'], [self.j])
++            if hit.hit:
++                k = clamp((hit.distance - c['margen']) / largo, 0, 1)
++        # acerca de golpe contra una pared; se aleja suavemente al despejarse
++        self.recorte = k if k < self.recorte else lerp(self.recorte, k, min(1, 6 * dt))
++        camera.position = local * self.recorte
++        self.p.mostrar_cuerpo(m * self.recorte > c['umbral_cuerpo'])
++
++    def apuntar(self):
++        """(origen, direccion) del disparo: sale de los ojos y converge en la mira."""
++        fwd = Vec3(*camera.forward)
++        if self.mezcla < .05:
++            return camera.world_position, fwd
++        cam = camera.world_position
++        hit = raycast(cam, fwd, distance=120, ignore=[self.j], debug=False)
++        punto = hit.world_point if hit.hit else cam + fwd * 120
++        ojo = self.ojo
++        d = punto - ojo
++        n = d.length()
++        return ojo, (d / n if n > .5 else fwd)
+diff --git a/game/weapon_mount.py b/game/weapon_mount.py
+new file mode 100644
+index 0000000..dd0cce6
+--- /dev/null
++++ b/game/weapon_mount.py
+@@ -0,0 +1,64 @@
++"""Montaje de armas en la mano del personaje.
++
++`pivote` (alias arma_modelo en engine.py) cuelga de la mano derecha: el arma pertenece al
++personaje, no a la camara. Cada arma se coloca sola segun su entrada en ARMAS:
++  - sin `modelo`: cubo provisional (escala/color de siempre)
++  - con `modelo=dict(archivo, escala, pos, rot, colores, mano_izq)`: modelo .glb
++Animaciones procedurales (equipar, reposo, disparo, recarga) sobre el rig de brazos;
++`evento()` es el punto de enganche para animaciones propias de un modelo.
++"""
++from ursina import Entity, color, lerp
++
++from .modelos import cargar_modelo_arma
++
++T_EQUIPAR = .30
++ROT_EQUIPAR = 55     # grados que baja el arma antes de subirla al equipar
++ROT_RECARGA = 38
++
++
++class MontajeArma:
++    def __init__(self, personaje):
++        self.p = personaje
++        self.pivote = Entity(parent=personaje.mano_d)
++        self.cubo = Entity(parent=self.pivote, model='cube', position=(0, 0, .18))
++        self.canon = Entity(parent=self.cubo, model='cube', position=(0, .25, .7),
++                            scale=(.6, .4, .7), color=color.black)
++        self.fogonazo = Entity(parent=self.pivote, model='quad', position=(0, .02, 1.0),
++                               scale=.35, color=color.yellow, billboard=True, enabled=False)
++        self._glb = {}
++        self._t_equipar = 0.0
++
++    def equipar(self, i, a, animar=True):
++        for ent in self._glb.values():
++            if ent:
++                ent.enabled = False
++        cfg = a.get('modelo')
++        if cfg and i not in self._glb:
++            self._glb[i] = cargar_modelo_arma(cfg, self.pivote)
++        modelo = self._glb.get(i) if cfg else None
++        if modelo:
++            self.cubo.enabled = False
++            modelo.enabled = True
++            mano = cfg.get('mano_izq', (.30, -.17, 1.05))
++        else:
++            self.cubo.enabled = True
++            self.cubo.color = a['color']
++            self.cubo.scale = a['escala']
++            mano = (.25, -.10, .90 + max(0, a['escala'][2] - .5) * .35)
++        self.p.apuntar_mano_izq(mano)
++        self.fogonazo.z = cfg.get('boca', 1.0) if cfg else 0.9 + a['escala'][2] * .5
++        if animar:
++            self.evento('equipar')
++
++    def evento(self, nombre):
++        """Gancho de animaciones: 'equipar' | 'disparo' | 'recarga' (ampliable por modelo)."""
++        if nombre == 'equipar':
++            self._t_equipar = T_EQUIPAR
++
++    def actualizar(self, dt, retroceso, recargando):
++        self._t_equipar = max(0.0, self._t_equipar - dt)
++        objetivo = ROT_RECARGA if recargando else 0
++        objetivo += ROT_EQUIPAR * (self._t_equipar / T_EQUIPAR)
++        rig = self.p.rig
++        rig.rotation_x = lerp(rig.rotation_x, objetivo, min(1, 12 * dt))
++        rig.z = -0.12 * retroceso

@@ -46,6 +46,14 @@ ARMAS: list[dict[str, Any]] = [
          recarga=2.2, perdigones=1, dispersion=.035, dispersion_ads=.0, auto=False,
          kick_v=3.2, kick_h=.5, tope=0, recup=4, mira='mildot', fov_ads=22,
          explosion=0, penetra=3, precio=600, color=color.hsv(210, .3, .25), escala=(.08, .12, 1.10),
+         # modelo 3D: rot (0, 90, 0) gira el canon (-X en el .glb) hacia +Z (adelante)
+         modelo=dict(archivo='Barret M82.glb', escala=.26, pos=(0, 0, .18), rot=(0, 90, 0),
+                     mano_izq=(.30, -.17, 1.12),   # apoyo de la mano izquierda (espacio de los hombros)
+                     # color por pieza (nombres de los nodos del .glb)
+                     colores=dict(Cuerpo=color.rgb32(88, 94, 84), Gatillo=color.rgb32(30, 30, 30),
+                                  Cargador=color.rgb32(28, 30, 34), Boquilla=color.rgb32(22, 24, 26),
+                                  mira_telescopica=color.rgb32(26, 28, 30),
+                                  Lente_1=color.rgb32(90, 150, 200), Lente_2=color.rgb32(90, 150, 200))),
          desc='Atraviesa hasta 3 enemigos. Mira 4x.'),
     dict(nombre='Lanzagranadas', dano=90, cadencia=1.0, cargador=4, reserva_ini=8, reserva_max=24,
          recarga=2.4, perdigones=1, dispersion=.005, dispersion_ads=.002, auto=False,
@@ -65,3 +73,26 @@ MEJORAS_ARMA: list[tuple[str, str, int, str]] = [
 ]
 
 # =====================================================================
+
+# =====================================================================
+#  PERSONAJE Y CAMARA (player*.py, weapon_mount.py)
+# =====================================================================
+TECLA_CAMARA = 'v'   # alterna FPS <-> TPS
+
+CAMARA_TPS = dict(
+    distancia=4.2,        # metros detras del personaje
+    hombro=.55,           # desplazamiento lateral (+ = derecha)
+    altura=.35,           # por encima de los ojos
+    suavizado=9.0,        # velocidad de la transicion FPS<->TPS
+    margen=.30,           # separacion minima con paredes/obstaculos
+    umbral_cuerpo=.30,    # a partir de esta distancia relativa se dibuja el cuerpo completo
+)
+
+PERSONAJE = dict(
+    ropa=color.rgb32(62, 72, 58),
+    chaleco=color.rgb32(36, 42, 48),
+    guante=color.rgb32(18, 18, 20),
+    casco=color.rgb32(44, 50, 46),
+    visor=color.rgb32(70, 140, 170),
+    acento=color.rgb32(225, 65, 75),
+)
