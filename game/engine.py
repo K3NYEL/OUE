@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from typing import Any
 import random
 import math
+from time import perf_counter as _perf_counter
+from datetime import datetime
 
 from .config import *
 from .audio import *
@@ -92,6 +94,45 @@ def nuevo_estado(record):
 
 S = SimpleNamespace()
 vars(S).update(nuevo_estado(leer_record()))
+
+# Cada partida genera su propio TXT dentro de /logs.
+_DIR_LOGS = Path(__file__).resolve().parent.parent / "logs"
+_archivo_log_partida = None
+_inicio_log_partida = None
+
+def iniciar_log_partida():
+    global _archivo_log_partida, _inicio_log_partida
+    ahora = datetime.now()
+    _DIR_LOGS.mkdir(parents=True, exist_ok=True)
+    _archivo_log_partida = _DIR_LOGS / f"partida_{ahora.strftime('%Y%m%d_%H%M%S')}.txt"
+    _inicio_log_partida = _perf_counter()
+    _archivo_log_partida.write_text(
+        "CAZADOR DE OLEADAS - REGISTRO DE PARTIDA\n"
+        f"Inicio: {ahora.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        + "=" * 64 + "\n",
+        encoding="utf-8",
+    )
+    registrar_evento("PARTIDA INICIADA")
+
+def registrar_evento(mensaje):
+    if _archivo_log_partida is None:
+        return
+    try:
+        transcurrido = _perf_counter() - (_inicio_log_partida or _perf_counter())
+        with _archivo_log_partida.open("a", encoding="utf-8") as archivo:
+            archivo.write(f"[+{transcurrido:07.1f}s] {mensaje}\n")
+    except OSError as error:
+        print(f"[LOG] No se pudo escribir el registro: {error}")
+
+def cerrar_log_partida(resultado):
+    if _archivo_log_partida is None:
+        return
+    registrar_evento(
+        f"FIN DE PARTIDA: {resultado} | oleada={S.oleada} | "
+        f"puntos={S.puntos} | bajas={S.muertes} | record={S.record}"
+    )
+    registrar_evento(f"Duracion: {_perf_counter() - (_inicio_log_partida or _perf_counter()):.1f}s")
+
 
 retro = Retroceso()   # retroceso acumulado con recuperacion (balistica.py)
 bloom = Bloom()       # dispersion creciente por rafaga
@@ -528,10 +569,14 @@ txt_hint = th("", L + CW_TL - PAD, T - 0.083, 0.85, color.white, "r")
 barra_enemigos = barra((L + CW_TL / 2, T - 0.106), (CW_TL - 2 * PAD, 0.008), ROJO_H)
 txt_puntos = th("", L + PAD, T - 0.138, 0.95, color.white)
 txt_cred = th("", L + CW_TL - PAD, T - 0.138, 1.05, ORO, "r")
-txt_combo = th("", L + PAD, T - CH_TL - 0.025, 0.7, NARANJA_H)
-txt_buff = th("", L + PAD, T - CH_TL - 0.055, 0.65, color.magenta)
+# Combo independiente: solo aparece cuando la racha está activa.
+box_combo = _entity_factory(parent=hud_info, enabled=False)
+tarjeta(box_combo, 0, T - 0.122, 0.30, 0.044, PANEL, NARANJA_H)
+caja(box_combo, -0.147, T - 0.122, 0.006, 0.044, NARANJA_H, 0.6)
+txt_combo = th("", 0, T - 0.133, 0.82, NARANJA_H, "c", box_combo)
+txt_buff = th("", L + PAD, T - CH_TL - 0.025, 0.65, color.magenta)
 
-# 2. Capsula de aviso / combo (arriba al centro)
+# 2. Cápsula de aviso (arriba al centro)
 box_aviso = _entity_factory(parent=hud_info, enabled=False)
 tarjeta(box_aviso, 0, T - 0.05, 0.42, 0.056)
 caja(box_aviso, -0.21, T - 0.05, 0.006, 0.056, ORO, 0.6)
@@ -557,6 +602,9 @@ for _w, _h in ((1.0, 0.006), (0.006, 1.0)):   # cruz de ejes
 _entity_factory(parent=radar, model=Mesh(vertices=[(0, 0.07, 0), (-0.045, -0.04, 0), (0.045, -0.04, 0)],
                                          triangles=[(0, 1, 2)]),
                 color=color.white, z=-0.02, double_sided=True)
+# Punto central: referencia fija de la posición del jugador.
+_entity_factory(parent=radar, model="circle", scale=0.018,
+                color=ORO, position=(0, 0, -0.025))
 
 # Brujula: 8 direcciones + marcas cada 15 grados, giran con el jugador (arriba = hacia donde miras)
 _GRIS_OSC = rgb255(105, 114, 130)
@@ -602,6 +650,7 @@ txt_vida_max = th("", X_VIDA_R, B + 0.097, 0.85, GRIS, "r")
 txt_vida_n = th("", X_VIDA_R - 0.09, B + 0.097, 1.7, color.white, "r")
 barra_vida = barra((L + CW_BL / 2, B + 0.063), (CW_BL - 2 * PAD, 0.017), VERDE)
 barra_stamina = barra((L + CW_BL / 2, B + 0.041), (CW_BL - 2 * PAD, 0.005), CIAN)
+# El color de vida comunica el estado sin depender únicamente del número.
 th("RESISTENCIA", L + PAD, B + 0.022, 0.55, GRIS)
 
 # 5. Habilidades: anillo con progreso + tecla debajo
@@ -624,6 +673,8 @@ HAB_COL = dict(dash=CIAN, onda=CIAN, torreta=ORO, furia=ROJO_H)
 HAB_NOM = dict(dash="DASH", onda="ONDA", torreta="TORR.", furia="FURIA")
 CD_TOT = {k: 0.0 for k in HABS}
 HR, HY = 0.045, -0.3875
+# Base común para agrupar las cuatro habilidades y sus teclas.
+tarjeta(hud_info, 0, -0.407, 0.49, 0.145, PANEL, BORDE, 0.67)
 hab_ui = {}
 for _xh, _k in zip((-0.1667, -0.0556, 0.0556, 0.1667), HABS):
     _entity_factory(parent=hud_info, model="circle", scale=HR * 2 - 0.012, position=(_xh, HY, 0.62), color=PANEL)
@@ -1003,6 +1054,7 @@ class Enemigo(Entity):
         if S.combo >= 3:
             aviso(f"¡Combo x{S.combo}! +{pts} puntos", 1.5, color.orange)
         S.muertes += 1
+        registrar_evento(f"BAJA: tipo={self.tipo} | puntos=+{pts} | bajas={S.muertes} | puntos_totales={S.puntos}")
         if S.perks["robo"] > 0:
             S.salud = min(S.salud_max, S.salud + 2 * S.perks["robo"])
         if self.tipo == "jefe":
@@ -1835,6 +1887,7 @@ def iniciar_oleada():
     S.oleada += 1
     S.cola = componer_oleada(S.oleada)
     S.enemigos_oleada_total = len(S.cola)
+    registrar_evento(f"OLEADA {S.oleada} INICIADA | enemigos={S.enemigos_oleada_total}")
     S.spawn_t = 1.5
     if S.oleada % 5 == 0:
         aviso(f"¡¡JEFE!!  Oleada {S.oleada}", 3, color.red)
@@ -1851,7 +1904,10 @@ def actualizar_oleadas(dt):
 
     if S.cola:
         S.spawn_t -= dt
-        max_sim = min(20, 5 + S.oleada * 2)
+        # Mantiene una horda activa acotada: cada enemigo tiene varias
+        # entidades visuales y actualiza IA/colisiones en cada frame.
+        # El total de enemigos de la oleada sigue creciendo por separado.
+        max_sim = min(12, 5 + S.oleada)
         if S.spawn_t <= 0 and len(enemigos) < max_sim:
             tipo = S.cola.pop(0)
             e = Enemigo(tipo, pos_spawn())
@@ -1860,6 +1916,7 @@ def actualizar_oleadas(dt):
             S.spawn_t = max(0.45, 1.5 - 0.06 * S.oleada)
     elif not enemigos:
         bono = 100 * S.oleada
+        registrar_evento(f"OLEADA {S.oleada} COMPLETADA | bono={bono}")
         ganar(bono)
         aviso(f"¡Oleada {S.oleada} superada!  +{bono}", 3, color.lime)
         S.intermedio = INTERMEDIO
@@ -1893,6 +1950,7 @@ def iniciar():
             destroy(e)
         lista.clear()
     vars(S).update(nuevo_estado(S.record))
+    iniciar_log_partida()
     retro.reiniciar()
     bloom.reiniciar()
     _heading_ult[0] = None
@@ -1924,6 +1982,7 @@ def pausar():
     mouse.locked = False
     camera.fov = 90
     ui_pausa.enabled = True
+    registrar_evento("PARTIDA PAUSADA")
 
 
 def reanudar():
@@ -1931,6 +1990,7 @@ def reanudar():
     jugador.enabled = True
     mouse.locked = True
     ui_pausa.enabled = False
+    registrar_evento("PARTIDA REANUDADA")
 
 
 def terminar():
@@ -1941,6 +2001,7 @@ def terminar():
     if nuevo:
         S.record = S.puntos
         guardar_record(S.record)
+    cerrar_log_partida("DERROTA")
     jugador.enabled = False
     mouse.visible = True
     mouse.locked = False
@@ -1956,6 +2017,7 @@ def terminar():
 
 
 def recoger(r):
+    registrar_evento(f"RECOGIDO: {r.tipo} | oleada={S.oleada}")
     if r.tipo == "salud":
         S.salud = min(S.salud_max, S.salud + 35)
         aviso("+35 Vida", 1, color.lime)
@@ -2012,8 +2074,12 @@ def actualizar_hud(dt):
         poner(txt_hint, f"{total_en} / {max_en}")
         barra_enemigos.scale_x = clamp(total_en / max_en, 0.0001, 1.0)
 
-    poner(txt_combo, f"COMBO  x{mult_combo():.1f}" if S.combo > 1 else "")
+    combo_activo = S.combo > 1
+    if box_combo.enabled != combo_activo:
+        box_combo.enabled = combo_activo
+    poner(txt_combo, f"COMBO  x{mult_combo():.1f}" if combo_activo else "")
     poner(txt_buff, f"DANO x2  {int(S.buff_t) + 1}s" if S.buff_t > 0 else "")
+    txt_buff.color = color.magenta if S.buff_t > 0 else GRIS
 
     # --- vida ---
     salud_max = max(S.salud_max, 1)
@@ -2022,7 +2088,9 @@ def actualizar_hud(dt):
     poner(txt_vida_n, f"{int(S.salud)}")
     txt_vida_n.x = X_VIDA_R - ancho(smax_txt, 0.85) - 0.012
     txt_vida_n.color = ROJO_H if S.salud < salud_max * 0.3 else color.white
-    barra_vida.scale_x = clamp(S.salud / salud_max, 0.0001, 1.0)
+    proporcion_vida = clamp(S.salud / salud_max, 0.0001, 1.0)
+    barra_vida.scale_x = proporcion_vida
+    barra_vida.color = ROJO_H if proporcion_vida <= 0.30 else (NARANJA_H if proporcion_vida <= 0.60 else VERDE)
     barra_stamina.scale_x = clamp(S.stamina / 100.0, 0.0001, 1.0)
 
     # --- municion ---
@@ -2107,8 +2175,67 @@ def actualizar_hud(dt):
         fogonazo.enabled = f
 
 
+# Perfilador por bloques: tiempos medios de CPU por frame.
+_PERFIL_INTERVALO = 5.0
+_perfil_tiempo = 0.0
+_perfil_frames = 0
+_perfil_acum = {"obstaculos": 0.0, "oleadas_ia_colisiones": 0.0, "drones_torretas": 0.0, "proyectiles_recogibles": 0.0, "efectos": 0.0, "hud_radar": 0.0}
+
+def registrar_perfil(dt_real):
+    global _perfil_tiempo, _perfil_frames
+    _perfil_tiempo += dt_real
+    _perfil_frames += 1
+    if _perfil_tiempo < _PERFIL_INTERVALO:
+        return
+    divisor = max(1, _perfil_frames)
+    partes = " | ".join(f"{nombre}={total * 1000 / divisor:.2f}ms" for nombre, total in _perfil_acum.items())
+    linea = f"[PERFIL] oleada={S.oleada} | estado={S.estado} | promedio por frame ({divisor} frames): {partes} | particulas={len(EFECTOS_ACTIVOS['particula'])} | rayos={len(EFECTOS_ACTIVOS['rayo'])} | anillos={len(EFECTOS_ACTIVOS['anillo'])} | recogibles={len(recogibles)} | torretas={len(torretas)} | drones={len(drones)}"
+    print(linea)
+    registrar_evento(linea)
+    _perfil_tiempo = 0.0
+    _perfil_frames = 0
+    for nombre in _perfil_acum:
+        _perfil_acum[nombre] = 0.0
+
+# Captura de rendimiento: una muestra agregada cada 5 segundos.
+_fps_tiempo = 0.0
+_fps_frames = 0
+_fps_minimo = float("inf")
+_fps_maximo = 0.0
+
+
+def capturar_fps(dt):
+    """Mide FPS reales y registra un resumen periódico en la consola."""
+    global _fps_tiempo, _fps_frames, _fps_minimo, _fps_maximo
+    if dt <= 0:
+        return
+
+    fps_actual = 1.0 / dt
+    _fps_tiempo += dt
+    _fps_frames += 1
+    _fps_minimo = min(_fps_minimo, fps_actual)
+    _fps_maximo = max(_fps_maximo, fps_actual)
+
+    if _fps_tiempo >= 5.0:
+        fps_promedio = _fps_frames / _fps_tiempo
+        linea = (
+            f"[FPS] estado={S.estado} | oleada={S.oleada} | "
+            f"actual={fps_actual:.1f} | promedio={fps_promedio:.1f} | "
+            f"min={_fps_minimo:.1f} | max={_fps_maximo:.1f} | "
+            f"enemigos={len(enemigos)} | proyectiles={len(proyectiles)}"
+        )
+        print(linea)
+        registrar_evento(linea)
+        _fps_tiempo = 0.0
+        _fps_frames = 0
+        _fps_minimo = float("inf")
+        _fps_maximo = 0.0
+
+
 def update():
-    dt = min(float(getattr(_ursina_time, "dt", 0.0)), 0.05)
+    dt_real = float(getattr(_ursina_time, "dt", 0.0))
+    capturar_fps(dt_real)
+    dt = min(dt_real, 0.05)
     if S.estado == "tienda":
         actualizar_tienda(dt)
         return
@@ -2119,7 +2246,9 @@ def update():
     global _obstaculos_timer
     _obstaculos_timer -= dt
     if _obstaculos_timer <= 0:
+        _t_perfil = _perf_counter()
         actualizar_obstaculos_visibles()
+        _perfil_acum["obstaculos"] += _perf_counter() - _t_perfil
         _obstaculos_timer = 0.20
 
     # --- correr / energia ---
@@ -2201,6 +2330,7 @@ def update():
     animador.actualizar(dt, bool(correr), personaje.raiz.enabled)
 
     # --- oleadas y enemigos ---
+    _t_perfil = _perf_counter()
     actualizar_oleadas(dt)
     construir_grid_enemigos()
     for e in enemigos[:]:
@@ -2208,14 +2338,18 @@ def update():
             e.actualizar(dt)
         if S.estado != "jugando":
             return
+    _perfil_acum["oleadas_ia_colisiones"] += _perf_counter() - _t_perfil
 
     # --- armas automaticas ---
+    _t_perfil = _perf_counter()
     for d in drones:
         d.actualizar(dt)
     for t in torretas[:]:
         t.actualizar(dt)
+    _perfil_acum["drones_torretas"] += _perf_counter() - _t_perfil
 
     # --- proyectiles enemigos ---
+    _t_perfil = _perf_counter()
     centro = jugador.world_position + Vec3(0, 1, 0)
     for p in proyectiles[:]:
         p.position += p.direccion * 14 * dt
@@ -2249,7 +2383,11 @@ def update():
         elif math.hypot(r.x - jugador.x, r.z - jugador.z) < 1.6 and jugador.y < 2.5:
             recoger(r)
 
+    _perfil_acum["proyectiles_recogibles"] += _perf_counter() - _t_perfil
+    _t_perfil = _perf_counter()
     limpiar_efectos()
+    _perfil_acum["efectos"] += _perf_counter() - _t_perfil
+    _t_perfil = _perf_counter()
 
     global _radar_timer, _hud_timer
     _radar_timer -= dt
@@ -2260,6 +2398,8 @@ def update():
     if _radar_timer <= 0:
         actualizar_radar()
         _radar_timer = RADAR_INTERVALO
+    _perfil_acum["hud_radar"] += _perf_counter() - _t_perfil
+    registrar_perfil(dt_real)
 
 
 def input(key):
