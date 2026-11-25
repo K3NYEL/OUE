@@ -135,7 +135,7 @@ def install(engine):
         -0.285,
         color.rgb(174, 38, 54),
         color.rgb(220, 55, 72),
-        engine.iniciar,
+        start_game,
         0.075,
     )
 
