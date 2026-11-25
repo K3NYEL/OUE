@@ -126,6 +126,10 @@ def install(engine):
         button.on_click = callback
         return button
 
+    def start_game():
+        root.enabled = False
+        engine.iniciar()
+
     make_button(
         "INICIAR PARTIDA",
         -0.285,
